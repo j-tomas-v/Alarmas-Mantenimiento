@@ -1,0 +1,24 @@
+[database]
+path = C:\ruta\a\Orden_MantenimientoV1.accdb
+year_from = 2025
+
+[smtp]
+server = smtp.empresa.com
+port = 587
+use_tls = true
+username = alertas@empresa.com
+password =
+from_name = Sistema Mantenimiento ATT
+
+[recipients]
+mantenimiento = jefe@empresa.com
+gerencia = gerente@empresa.com
+conductores = conductor1@empresa.com
+
+[alertas]
+intervalo_check_horas = 4
+cooldown_dias = 7
+horario_inicio = 07:00
+horario_fin = 18:00
+dias_aviso_proximo = 7
+frecuencia_default_dias = 30
