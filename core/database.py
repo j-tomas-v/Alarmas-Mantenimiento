@@ -80,41 +80,47 @@ def get_pending_orders(db_path: str, year_from: int = 2025) -> list[OrdenManteni
     try:
         conn = pyodbc.connect(conn_str)
         cursor = conn.cursor()
+        # Use o.* to avoid pyodbc counting '?' inside column names like
+        # [¿Con parada de producción?] and [¿Finalizado?] as parameter markers.
+        # Use an Access date literal instead of a '?' parameter for the same reason.
+        date_literal = f"#{year_from}/01/01#"
         query = (
-            "SELECT "
-            "  o.[N°OM], o.[Fecha], o.[Preventivo], o.[Correctivo], "
-            "  o.[Alta], o.[Media], o.[Baja], o.[Solicita], "
-            "  o.[Realizar el día], o.[¿Con parada de producción?], "
-            "  o.[ID PAMPO], o.[¿Finalizado?], o.[Fecha realización], "
-            "  o.[PM1], o.[PM2], o.[PM3], "
-            "  o.[Cusa falla/Observaciones], "
-            "  p.[Máquina], p.[Actividad] "
+            "SELECT o.*, p.[Máquina], p.[Actividad] "
             "FROM [Base Orden Mantenimiento] AS o "
             "LEFT JOIN [PAMPO] AS p ON o.[ID PAMPO] = p.[ID_PAMPO] "
-            "WHERE o.[Fecha] >= ? "
+            f"WHERE o.[Fecha] >= {date_literal} "
             "ORDER BY o.[Fecha] DESC"
         )
-        start_date = datetime(year_from, 1, 1)
-        cursor.execute(query, start_date)
+        cursor.execute(query)
+        cols = {desc[0]: i for i, desc in enumerate(cursor.description)}
 
         for row in cursor.fetchall():
-            personal = [p for p in [row[13], row[14], row[15]] if p]
+            id_pampo_val = row[cols["ID PAMPO"]]
+            personal = [p for p in [
+                row[cols.get("PM1")],
+                row[cols.get("PM2")],
+                row[cols.get("PM3")],
+            ] if p]
             orden = OrdenMantenimiento(
-                n_om=row[0],
-                fecha=_clean_date(row[1]),
-                preventivo=bool(row[2]),
-                correctivo=bool(row[3]),
-                prioridad=_parse_priority(bool(row[4]), bool(row[5]), bool(row[6])),
-                solicita=row[7] or "",
-                realizar_el_dia=_clean_date(row[8]),
-                con_parada=bool(row[9]),
-                id_pampo=int(row[10]) if row[10] else 0,
-                finalizado=bool(row[11]),
-                fecha_realizacion=_clean_date(row[12]),
+                n_om=row[cols["N°OM"]],
+                fecha=_clean_date(row[cols["Fecha"]]),
+                preventivo=bool(row[cols["Preventivo"]]),
+                correctivo=bool(row[cols["Correctivo"]]),
+                prioridad=_parse_priority(
+                    bool(row[cols["Alta"]]),
+                    bool(row[cols["Media"]]),
+                    bool(row[cols["Baja"]]),
+                ),
+                solicita=row[cols["Solicita"]] or "",
+                realizar_el_dia=_clean_date(row[cols["Realizar el día"]]),
+                con_parada=bool(row[cols["¿Con parada de producción?"]]),
+                id_pampo=int(id_pampo_val) if id_pampo_val else 0,
+                finalizado=bool(row[cols["¿Finalizado?"]]),
+                fecha_realizacion=_clean_date(row[cols["Fecha realización"]]),
                 personal=personal,
-                observaciones=row[16] or "",
-                maquina=row[17] or f"PAMPO #{row[10]}",
-                actividad=row[18] or "",
+                observaciones=row[cols["Cusa falla/Observaciones"]] or "",
+                maquina=row[cols["Máquina"]] or f"PAMPO #{id_pampo_val}",
+                actividad=row[cols["Actividad"]] or "",
             )
             orders.append(orden)
         conn.close()
@@ -130,41 +136,47 @@ def get_all_orders(db_path: str, year_from: int = 2025) -> list[OrdenMantenimien
     try:
         conn = pyodbc.connect(conn_str)
         cursor = conn.cursor()
+        # Use o.* to avoid pyodbc counting '?' inside column names like
+        # [¿Con parada de producción?] and [¿Finalizado?] as parameter markers.
+        # Use an Access date literal instead of a '?' parameter for the same reason.
+        date_literal = f"#{year_from}/01/01#"
         query = (
-            "SELECT "
-            "  o.[N°OM], o.[Fecha], o.[Preventivo], o.[Correctivo], "
-            "  o.[Alta], o.[Media], o.[Baja], o.[Solicita], "
-            "  o.[Realizar el día], o.[¿Con parada de producción?], "
-            "  o.[ID PAMPO], o.[¿Finalizado?], o.[Fecha realización], "
-            "  o.[PM1], o.[PM2], o.[PM3], "
-            "  o.[Cusa falla/Observaciones], "
-            "  p.[Máquina], p.[Actividad] "
+            "SELECT o.*, p.[Máquina], p.[Actividad] "
             "FROM [Base Orden Mantenimiento] AS o "
             "LEFT JOIN [PAMPO] AS p ON o.[ID PAMPO] = p.[ID_PAMPO] "
-            "WHERE o.[Fecha] >= ? "
+            f"WHERE o.[Fecha] >= {date_literal} "
             "ORDER BY o.[Fecha] DESC"
         )
-        start_date = datetime(year_from, 1, 1)
-        cursor.execute(query, start_date)
+        cursor.execute(query)
+        cols = {desc[0]: i for i, desc in enumerate(cursor.description)}
 
         for row in cursor.fetchall():
-            personal = [p for p in [row[13], row[14], row[15]] if p]
+            id_pampo_val = row[cols["ID PAMPO"]]
+            personal = [p for p in [
+                row[cols.get("PM1")],
+                row[cols.get("PM2")],
+                row[cols.get("PM3")],
+            ] if p]
             orden = OrdenMantenimiento(
-                n_om=row[0],
-                fecha=_clean_date(row[1]),
-                preventivo=bool(row[2]),
-                correctivo=bool(row[3]),
-                prioridad=_parse_priority(bool(row[4]), bool(row[5]), bool(row[6])),
-                solicita=row[7] or "",
-                realizar_el_dia=_clean_date(row[8]),
-                con_parada=bool(row[9]),
-                id_pampo=int(row[10]) if row[10] else 0,
-                finalizado=bool(row[11]),
-                fecha_realizacion=_clean_date(row[12]),
+                n_om=row[cols["N°OM"]],
+                fecha=_clean_date(row[cols["Fecha"]]),
+                preventivo=bool(row[cols["Preventivo"]]),
+                correctivo=bool(row[cols["Correctivo"]]),
+                prioridad=_parse_priority(
+                    bool(row[cols["Alta"]]),
+                    bool(row[cols["Media"]]),
+                    bool(row[cols["Baja"]]),
+                ),
+                solicita=row[cols["Solicita"]] or "",
+                realizar_el_dia=_clean_date(row[cols["Realizar el día"]]),
+                con_parada=bool(row[cols["¿Con parada de producción?"]]),
+                id_pampo=int(id_pampo_val) if id_pampo_val else 0,
+                finalizado=bool(row[cols["¿Finalizado?"]]),
+                fecha_realizacion=_clean_date(row[cols["Fecha realización"]]),
                 personal=personal,
-                observaciones=row[16] or "",
-                maquina=row[17] or f"PAMPO #{row[10]}",
-                actividad=row[18] or "",
+                observaciones=row[cols["Cusa falla/Observaciones"]] or "",
+                maquina=row[cols["Máquina"]] or f"PAMPO #{id_pampo_val}",
+                actividad=row[cols["Actividad"]] or "",
             )
             orders.append(orden)
         conn.close()
