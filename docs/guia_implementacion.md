@@ -139,10 +139,14 @@ year_from = 2025
 ; Servidor SMTP de la empresa
 server = smtp.tuempresa.com
 
-; Puerto (587 para TLS, 465 para SSL, 25 para sin cifrado)
+; Puerto:
+;   587 → STARTTLS (TLS habilitado)
+;   465 → SSL implícito (TLS habilitado)
+;   25  → sin cifrado (TLS deshabilitado)
 port = 587
 
 ; Usar TLS (recomendado: true)
+; El sistema detecta automáticamente si usar STARTTLS (587) o SSL directo (465)
 use_tls = true
 
 ; Cuenta de email desde la que se envían las alertas
@@ -188,7 +192,7 @@ La ruta al `.accdb` puede ser:
 - **Local:** `C:\Users\usuario\Documents\Orden_MantenimientoV1.accdb`
 - **Red compartida:** `\\SERVIDOR\Compartido\Orden_MantenimientoV1.accdb`
 
-Si la DB está en un servidor de red, asegurarse de que la PC tenga permisos de **lectura** sobre esa carpeta compartida.
+Si la DB está en un servidor de red, asegurarse de que la PC tenga permisos de **lectura y escritura** sobre esa carpeta compartida. El sistema puede actualizar los campos PM1, PM2, PM3 de las órdenes directamente desde la vista de Alertas.
 
 ---
 
@@ -273,7 +277,8 @@ ATT_Mantenimiento/           ← carpeta que se copia a cada PC
 ├── data/
 │   ├── pampo_frequencies.json
 │   ├── vehicle_mileage.json
-│   └── alert_log.json
+│   ├── alert_log.json
+│   └── personal_directory.json  ← directorio nombre→email del personal
 └── templates/
     ├── overdue_alert.html
     ├── upcoming_alert.html
@@ -370,10 +375,11 @@ ATT_alarmas_mantenimiento/
 │
 ├── core/
 │   ├── models.py                # Dataclasses: OrdenMantenimiento, Alert, etc.
-│   ├── database.py              # Conexión pyodbc read-only a Access
+│   ├── database.py              # Conexión pyodbc a Access (lectura/escritura)
 │   ├── urgency.py               # Cálculo de estado y severidad
 │   ├── alerts.py                # Sistema de alertas extensible
-│   └── email_service.py        # Envío SMTP
+│   ├── email_service.py         # Envío SMTP (STARTTLS y SSL)
+│   └── personal_directory.py   # Directorio nombre→email del personal
 │
 ├── gui/
 │   ├── app.py                   # Ventana principal y navegación
@@ -390,10 +396,11 @@ ATT_alarmas_mantenimiento/
 │   ├── upcoming_alert.html
 │   └── vehicle_request.html
 │
-├── data/                        # Datos locales (NO son la DB Access)
-│   ├── pampo_frequencies.json   # Frecuencias por ID PAMPO
-│   ├── vehicle_mileage.json     # Registros de kilometraje
-│   └── alert_log.json           # Historial de alertas enviadas
+├── data/                            # Datos locales (NO son la DB Access)
+│   ├── pampo_frequencies.json       # Frecuencias por ID PAMPO
+│   ├── vehicle_mileage.json         # Registros de kilometraje
+│   ├── alert_log.json               # Historial de alertas enviadas
+│   └── personal_directory.json      # Directorio nombre→email del personal
 │
 └── docs/
     ├── guia_usuario.pdf
@@ -405,15 +412,18 @@ ATT_alarmas_mantenimiento/
 
 ```
 Archivo .accdb (Access)
-        ↓  (read-only, pyodbc)
+        ↓↑  (lectura/escritura, pyodbc)
   database.py  →  lista de OrdenMantenimiento
-        ↓
+        ↓                         ↑ update_personal() (PM1/PM2/PM3)
   urgency.py   →  calcula estado, fecha_limite, severidad
         ↓
   alerts.py    →  evalúa condiciones, genera lista de Alert
         ↓                    ↓
   gui/dashboard.py      email_service.py
   (muestra tabla)       (envía notificaciones)
+                              ↑
+                   personal_directory.py
+                   (resuelve emails del personal asignado)
 ```
 
 ---
@@ -449,11 +459,14 @@ La app muestra el mensaje en la barra de estado inferior.
 El botón "Probar conexión" en Configuración devuelve error.
 
 **Checklist:**
-- `server`: dirección correcta del servidor SMTP de la empresa
-- `port`: preguntar al área de sistemas (típico: 25, 465 o 587)
-- `use_tls`: `true` para puerto 587, `false` para puerto 25
+- `server`: dirección correcta del servidor SMTP (ej: `mail.empresa.com`)
+- `port` y `use_tls`:
+  - Puerto **465** + TLS activado → SSL directo (cPanel, algunos proveedores)
+  - Puerto **587** + TLS activado → STARTTLS (Gmail, Office 365)
+  - Puerto **25** + TLS desactivado → sin cifrado (redes internas)
 - `username` y `password`: credenciales de la cuenta de email
 - Firewall: la PC debe tener salida al puerto SMTP configurado
+- Para verificar conectividad desde CMD: `telnet mail.empresa.com 465`
 
 ---
 
@@ -511,4 +524,50 @@ python3 docs/generar_guia_usuario.py
 
 ---
 
-*Guía de Implementación v1.0 — Abril 2026*
+## 11. Directorio de personal y asignación de emails
+
+### 11.1 Archivo `data/personal_directory.json`
+
+Mapea el nombre de cada técnico con su dirección de email. Se crea automáticamente al guardar desde la app.
+
+```json
+{
+    "Juan Lopez": "juan@empresa.com",
+    "Pedro Gomez": "pedro@empresa.com"
+}
+```
+
+### 11.2 Gestionar desde la app
+
+1. Ir a **Configuración** → sección **Directorio de Personal**
+2. Ingresar nombre y email en los campos inferiores
+3. Presionar **"Agregar / Actualizar"** para guardar
+4. Para eliminar: seleccionar una fila y presionar **"Eliminar seleccionado"**
+
+### 11.3 Asignar personal a una orden desde Alertas
+
+1. Ir a **Alertas** → presionar **"Evaluar alertas"**
+2. Seleccionar una alerta con orden asociada
+3. Presionar **"Asignar personal"**
+4. En el diálogo, seleccionar PM1/PM2/PM3 de los dropdowns (se autocompletan con los nombres del directorio)
+5. Presionar **"Guardar"** — escribe PM1/PM2/PM3 directamente en Access y actualiza la UI
+
+### 11.4 Flujo de destinatarios al enviar una alerta
+
+Cuando se envía una alerta de una orden, los destinatarios son:
+1. El grupo base configurado en `config.ini` → `[recipients]` → `mantenimiento`
+2. Los emails del personal asignado (PM1/PM2/PM3) resueltos desde `personal_directory.json`
+
+Si un técnico no tiene email registrado en el directorio, simplemente se omite.
+
+### 11.5 Módulo `core/personal_directory.py`
+
+| Función | Descripción |
+|---|---|
+| `load_directory()` | Carga `data/personal_directory.json`. Retorna `dict[str, str]`. |
+| `save_directory(d)` | Guarda el diccionario en el archivo. |
+| `get_emails_for(names)` | Recibe lista de nombres, retorna lista de emails registrados. |
+
+---
+
+*Guía de Implementación v1.1 — Abril 2026*

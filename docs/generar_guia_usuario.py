@@ -193,7 +193,7 @@ def build_pdf():
     # Version info
     version_style = ParagraphStyle("ver", fontName="Helvetica", fontSize=9,
                                    alignment=TA_CENTER, textColor=GRAY)
-    story.append(Paragraph("Version 1.0", version_style))
+    story.append(Paragraph("Version 1.1", version_style))
 
     story.append(PageBreak())
 
@@ -204,11 +204,12 @@ def build_pdf():
     toc_items = [
         ("1.", "Introduccion"),
         ("2.", "Pantalla Principal - Dashboard"),
-        ("3.", "Alertas"),
+        ("3.", "Alertas y Asignacion de Personal"),
         ("4.", "Vehiculos - Registro de Kilometraje"),
-        ("5.", "Significado de Colores y Prioridades"),
-        ("6.", "Emails Automaticos"),
-        ("7.", "Preguntas Frecuentes"),
+        ("5.", "Configuracion"),
+        ("6.", "Significado de Colores y Prioridades"),
+        ("7.", "Emails Automaticos"),
+        ("8.", "Preguntas Frecuentes"),
     ]
     for num, title in toc_items:
         story.append(Paragraph(
@@ -244,9 +245,9 @@ def build_pdf():
 
     # Important note box
     note_data = [[Paragraph(
-        "<b>IMPORTANTE:</b> Este sistema es de <b>solo lectura</b> respecto a la base de datos Access. "
-        "No modifica ni agrega registros en la base de datos. Los datos de kilometraje y "
-        "configuracion se guardan en archivos locales separados.",
+        "<b>NOTA:</b> El sistema puede actualizar el personal asignado (PM1/PM2/PM3) directamente "
+        "en la base de datos Access desde la vista de Alertas. Los datos de kilometraje, "
+        "configuracion y directorio de personal se guardan en archivos locales separados.",
         ParagraphStyle("note", fontName="Helvetica", fontSize=9, leading=13, textColor=DARK))]]
     note_table = Table(note_data, colWidths=[14 * cm])
     note_table.setStyle(TableStyle([
@@ -370,12 +371,13 @@ def build_pdf():
     story.append(PageBreak())
 
     # ========== 3. ALERTAS ==========
-    story.append(Paragraph("3. Alertas", styles["SectionTitle"]))
+    story.append(Paragraph("3. Alertas y Asignacion de Personal", styles["SectionTitle"]))
     add_header_line(story)
 
     story.append(Paragraph(
         "La seccion de Alertas permite evaluar el estado actual de todos los mantenimientos "
-        "y generar notificaciones que pueden enviarse por email a los responsables.",
+        "y generar notificaciones que pueden enviarse por email a los responsables. "
+        "Tambien permite asignar personal directamente desde la lista de alertas.",
         styles["BodyText2"]))
 
     story.append(Paragraph("3.1 Tipos de Alerta", styles["SubSection"]))
@@ -406,7 +408,10 @@ def build_pdf():
     story.append(Paragraph("3.2 Acciones", styles["SubSection"]))
 
     actions = [
-        '<b>"Evaluar alertas":</b> Analiza todas las ordenes pendientes y genera la lista de alertas actual.',
+        '<b>"Evaluar alertas":</b> Analiza todas las ordenes pendientes y genera la lista de alertas actual. '
+        'La tabla incluye una columna <b>Personal</b> mostrando quien esta asignado a cada orden.',
+        '<b>"Asignar personal":</b> Seleccione una alerta y presione este boton para abrir un dialogo '
+        'donde puede asignar PM1, PM2 y PM3 a la orden. Los cambios se guardan directamente en Access.',
         '<b>"Enviar seleccionada":</b> Seleccione una alerta de la lista y presione este boton para enviar '
         'un email de notificacion a los destinatarios correspondientes.',
         '<b>"Enviar todas pendientes":</b> Envia emails para todas las alertas que no hayan sido enviadas '
@@ -415,7 +420,15 @@ def build_pdf():
     for a in actions:
         story.append(Paragraph(f"\u2022  {a}", styles["BulletItem"]))
 
-    story.append(Paragraph("3.3 Sistema de Cooldown", styles["SubSection"]))
+    story.append(Paragraph("3.3 Asignar Personal a una Orden", styles["SubSection"]))
+    story.append(Paragraph(
+        "Al presionar <b>'Asignar personal'</b> con una alerta seleccionada, se abre un dialogo con "
+        "tres campos (PM1, PM2, PM3). Los desplegables se autocompletan con los nombres registrados "
+        "en el Directorio de Personal (ver seccion 5.2). Al guardar, el sistema actualiza los campos "
+        "en la base de datos Access y refresca la tabla de alertas.",
+        styles["BodyText2"]))
+
+    story.append(Paragraph("3.4 Sistema de Cooldown", styles["SubSection"]))
     story.append(Paragraph(
         "Para evitar saturar las casillas de email, el sistema tiene un periodo de <b>cooldown</b> "
         "(por defecto 7 dias). Si una alerta ya fue enviada dentro de ese periodo, no se reenviara "
@@ -477,11 +490,56 @@ def build_pdf():
 
     story.append(PageBreak())
 
-    # ========== 5. COLORES Y PRIORIDADES ==========
-    story.append(Paragraph("5. Significado de Colores y Prioridades", styles["SectionTitle"]))
+    # ========== 5. CONFIGURACION ==========
+    story.append(Paragraph("5. Configuracion", styles["SectionTitle"]))
     add_header_line(story)
 
-    story.append(Paragraph("5.1 Colores de Estado", styles["SubSection"]))
+    story.append(Paragraph(
+        "La seccion Configuracion permite ajustar todos los parametros del sistema sin necesidad "
+        "de editar archivos manualmente.",
+        styles["BodyText2"]))
+
+    story.append(Paragraph("5.1 Servidor SMTP", styles["SubSection"]))
+    story.append(Paragraph(
+        "Configure la cuenta de email desde la que se enviaran las alertas. "
+        "Use el boton <b>'Probar conexion'</b> para verificar que los datos sean correctos "
+        "antes de guardar. El sistema soporta SSL (puerto 465) y STARTTLS (puerto 587).",
+        styles["BodyText2"]))
+
+    story.append(Paragraph("5.2 Directorio de Personal", styles["SubSection"]))
+    story.append(Paragraph(
+        "Permite registrar el nombre y el email de cada integrante del equipo de mantenimiento. "
+        "Estos datos se usan para:",
+        styles["BodyText2"]))
+
+    pd_uses = [
+        "Autocompletar los desplegables al asignar personal a una orden desde la vista de Alertas.",
+        "Agregar automaticamente los emails del personal asignado (PM1/PM2/PM3) como destinatarios "
+        "al enviar una alerta de esa orden.",
+    ]
+    for u in pd_uses:
+        story.append(Paragraph(f"\u2022  {u}", styles["BulletItem"]))
+
+    story.append(Paragraph(
+        "Para agregar una persona: complete los campos <b>Nombre</b> y <b>Email</b> y presione "
+        "<b>'Agregar / Actualizar'</b>. Para eliminar: seleccione la fila y presione "
+        "<b>'Eliminar seleccionado'</b>.",
+        styles["BodyText2"]))
+
+    story.append(Paragraph("5.3 Destinatarios de Email", styles["SubSection"]))
+    story.append(Paragraph(
+        "Permite configurar las listas de destinatarios para cada tipo de alerta. "
+        "Los grupos disponibles son: Equipo mantenimiento, Gerencia y Conductores. "
+        "Se pueden ingresar multiples emails separados por coma.",
+        styles["BodyText2"]))
+
+    story.append(PageBreak())
+
+    # ========== 6. COLORES Y PRIORIDADES ==========
+    story.append(Paragraph("6. Significado de Colores y Prioridades", styles["SectionTitle"]))
+    add_header_line(story)
+
+    story.append(Paragraph("6.1 Colores de Estado", styles["SubSection"]))
     story.append(Paragraph(
         "El sistema utiliza un codigo de colores consistente en toda la aplicacion para "
         "indicar el estado de urgencia de cada orden:",
@@ -522,7 +580,7 @@ def build_pdf():
     story.append(est_table)
     story.append(Spacer(1, 0.5 * cm))
 
-    story.append(Paragraph("5.2 Niveles de Prioridad", styles["SubSection"]))
+    story.append(Paragraph("6.2 Niveles de Prioridad", styles["SubSection"]))
     story.append(Paragraph(
         "La prioridad indica el nivel de impacto que puede tener si el mantenimiento no se realiza:",
         styles["BodyText2"]))
@@ -558,8 +616,8 @@ def build_pdf():
 
     story.append(PageBreak())
 
-    # ========== 6. EMAILS AUTOMATICOS ==========
-    story.append(Paragraph("6. Emails Automaticos", styles["SectionTitle"]))
+    # ========== 7. EMAILS AUTOMATICOS ==========
+    story.append(Paragraph("7. Emails Automaticos", styles["SectionTitle"]))
     add_header_line(story)
 
     story.append(Paragraph(
@@ -568,7 +626,7 @@ def build_pdf():
         "es configurable (por defecto cada 4 horas).",
         styles["BodyText2"]))
 
-    story.append(Paragraph("6.1 Tipos de Email", styles["SubSection"]))
+    story.append(Paragraph("7.1 Tipos de Email", styles["SubSection"]))
 
     email_types = [
         "<b>Alerta de mantenimiento vencido:</b> Email con fondo rojo informando que un "
@@ -582,7 +640,22 @@ def build_pdf():
     for e in email_types:
         story.append(Paragraph(f"\u2022  {e}", styles["BulletItem"]))
 
-    story.append(Paragraph("6.2 Al Recibir un Email", styles["SubSection"]))
+    story.append(Paragraph("7.2 Destinatarios de las Alertas", styles["SubSection"]))
+    story.append(Paragraph(
+        "Cuando el sistema envia una alerta sobre una orden de mantenimiento, los destinatarios son:",
+        styles["BodyText2"]))
+    dest_items = [
+        "El grupo <b>Equipo mantenimiento</b> configurado en la seccion Configuracion.",
+        "Los emails del personal asignado (PM1/PM2/PM3) si tienen email registrado en el "
+        "Directorio de Personal.",
+    ]
+    for d in dest_items:
+        story.append(Paragraph(f"\u2022  {d}", styles["BulletItem"]))
+    story.append(Paragraph(
+        "Las alertas de kilometraje se envian solo al grupo <b>Conductores</b>.",
+        styles["BodyText2"]))
+
+    story.append(Paragraph("7.3 Al Recibir un Email", styles["SubSection"]))
 
     responses = [
         ["Tipo de Email", "Accion requerida"],
@@ -612,8 +685,8 @@ def build_pdf():
 
     story.append(PageBreak())
 
-    # ========== 7. FAQ ==========
-    story.append(Paragraph("7. Preguntas Frecuentes", styles["SectionTitle"]))
+    # ========== 8. FAQ ==========
+    story.append(Paragraph("8. Preguntas Frecuentes", styles["SectionTitle"]))
     add_header_line(story)
 
     faqs = [
@@ -623,9 +696,8 @@ def build_pdf():
          "automaticamente cada cierta cantidad de horas (configurable)."),
 
         ("Puedo modificar la base de datos desde el sistema?",
-         "No. El sistema funciona en modo de solo lectura. La base de datos Access debe "
-         "seguir siendo editada por el equipo de Control de Calidad como se hace habitualmente. "
-         "El sistema solo lee los datos para mostrarlos y generar alertas."),
+         "Si, parcialmente. Desde la vista de Alertas se puede asignar personal (PM1/PM2/PM3) "
+         "a cualquier orden. El resto de los campos debe seguir editandose directamente en Access."),
 
         ("Que hago si aparece un error de conexion?",
          "Verifique que: (1) La base de datos Access no este abierta en modo exclusivo por "
@@ -652,7 +724,19 @@ def build_pdf():
 
         ("Puedo usar el sistema en varias computadoras?",
          "Si, siempre que todas apunten a la misma base de datos Access y tengan el driver "
-         "ODBC instalado. Los datos de kilometraje y alertas son locales a cada computadora."),
+         "ODBC instalado. Los datos de kilometraje, alertas y directorio de personal son "
+         "locales a cada computadora."),
+
+        ("Como agrego el email de un tecnico para que reciba las alertas?",
+         "Ir a Configuracion seccion 'Directorio de Personal'. Ingresar el nombre exactamente "
+         "como aparece en PM1/PM2/PM3 de Access y su email. Al enviar una alerta de una orden "
+         "con ese tecnico asignado, recibira el email automaticamente."),
+
+        ("Por que el tecnico asignado no recibe el email?",
+         "Verificar que: (1) El nombre en el Directorio de Personal coincida exactamente con "
+         "el nombre guardado en PM1/PM2/PM3 en Access (respetando mayusculas y espacios). "
+         "(2) El email del tecnico sea correcto. (3) El servidor SMTP este correctamente "
+         "configurado (probar con 'Probar conexion' en Configuracion)."),
     ]
 
     for q, a in faqs:
@@ -662,7 +746,7 @@ def build_pdf():
     story.append(Spacer(1, 1 * cm))
     story.append(HRFlowable(width="100%", thickness=1, color=GRAY, spaceBefore=0, spaceAfter=10))
     story.append(Paragraph(
-        "Sistema de Alarmas de Mantenimiento ATT - Guia de Usuario v1.0 - Abril 2026<br/>"
+        "Sistema de Alarmas de Mantenimiento ATT - Guia de Usuario v1.1 - Abril 2026<br/>"
         "Equipo de Control de Calidad",
         styles["Footer"]))
 
