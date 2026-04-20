@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from core.models import Alert, EstadoUrgencia, MileageRecord, OrdenMantenimiento, Prioridad
+from core.personal_directory import get_emails_for
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,14 @@ class AlertEvaluator(ABC):
     def get_recipients(self, alert: Alert, config: dict) -> list[str]:
         """Return email recipients for this alert. Override for custom routing."""
         recipients_str = config.get("recipients", {}).get("mantenimiento", "")
-        return [r.strip() for r in recipients_str.split(",") if r.strip()]
+        base = [r.strip() for r in recipients_str.split(",") if r.strip()]
+        # Add emails of assigned personnel if available
+        if alert.orden and alert.orden.personal:
+            personal_emails = get_emails_for(alert.orden.personal)
+            for email in personal_emails:
+                if email not in base:
+                    base.append(email)
+        return base
 
 
 class OverdueMaintenanceEvaluator(AlertEvaluator):

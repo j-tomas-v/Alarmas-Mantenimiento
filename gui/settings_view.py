@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 from core.email_service import test_smtp_connection
+from core.personal_directory import load_directory, save_directory
 from gui.styles import COLOR_BG, COLOR_CARD_BG, COLOR_TEXT, FONT_BODY, FONT_SUBTITLE, FONT_TITLE, PADDING
 
 PAMPO_FREQ_PATH = "data/pampo_frequencies.json"
@@ -120,6 +121,42 @@ class SettingsView(tk.Frame):
         tk.Label(recip_frame, text="(Separar multiples emails con coma)",
                  font=("Segoe UI", 8), fg="#7F8C8D", bg=COLOR_CARD_BG).pack(anchor="w")
 
+        # === Personal Directory ===
+        personal_frame = tk.LabelFrame(parent, text="Directorio de Personal",
+                                       font=FONT_SUBTITLE, bg=COLOR_CARD_BG, padx=15, pady=10)
+        personal_frame.pack(fill="x", pady=(0, PADDING))
+
+        personal_cols = [("nombre", "Nombre", 200), ("email", "Email", 300)]
+        pd_tree_frame = tk.Frame(personal_frame, bg=COLOR_CARD_BG)
+        pd_tree_frame.pack(fill="x")
+
+        pd_vsb = ttk.Scrollbar(pd_tree_frame, orient="vertical")
+        self._personal_tree = ttk.Treeview(
+            pd_tree_frame, columns=[c[0] for c in personal_cols],
+            show="headings", height=6, yscrollcommand=pd_vsb.set)
+        pd_vsb.config(command=self._personal_tree.yview)
+        for col_id, heading, width in personal_cols:
+            self._personal_tree.heading(col_id, text=heading)
+            self._personal_tree.column(col_id, width=width)
+        self._personal_tree.grid(row=0, column=0, sticky="nsew")
+        pd_vsb.grid(row=0, column=1, sticky="ns")
+        pd_tree_frame.grid_columnconfigure(0, weight=1)
+
+        pd_edit_row = tk.Frame(personal_frame, bg=COLOR_CARD_BG)
+        pd_edit_row.pack(fill="x", pady=(6, 0))
+        tk.Label(pd_edit_row, text="Nombre:", font=FONT_BODY, bg=COLOR_CARD_BG).pack(side="left", padx=(0, 3))
+        self._pd_name_var = tk.StringVar()
+        tk.Entry(pd_edit_row, textvariable=self._pd_name_var, width=20, font=FONT_BODY).pack(side="left", padx=(0, 10))
+        tk.Label(pd_edit_row, text="Email:", font=FONT_BODY, bg=COLOR_CARD_BG).pack(side="left", padx=(0, 3))
+        self._pd_email_var = tk.StringVar()
+        tk.Entry(pd_edit_row, textvariable=self._pd_email_var, width=28, font=FONT_BODY).pack(side="left", padx=(0, 10))
+        ttk.Button(pd_edit_row, text="Agregar / Actualizar",
+                   command=self._pd_upsert).pack(side="left", padx=(0, 5))
+        ttk.Button(pd_edit_row, text="Eliminar seleccionado",
+                   command=self._pd_delete).pack(side="left")
+
+        self._personal_tree.bind("<<TreeviewSelect>>", self._pd_on_select)
+
         # === Alert Settings ===
         alert_frame = tk.LabelFrame(parent, text="Parametros de Alertas", font=FONT_SUBTITLE,
                                     bg=COLOR_CARD_BG, padx=15, pady=10)
@@ -191,6 +228,41 @@ class SettingsView(tk.Frame):
         # === Save All Button ===
         ttk.Button(parent, text="Guardar toda la configuracion",
                    command=self._save_all).pack(pady=PADDING)
+
+    def _pd_load(self):
+        self._personal_tree.delete(*self._personal_tree.get_children())
+        for name, email in sorted(load_directory().items()):
+            self._personal_tree.insert("", "end", values=(name, email))
+
+    def _pd_on_select(self, event):
+        selection = self._personal_tree.selection()
+        if selection:
+            vals = self._personal_tree.item(selection[0], "values")
+            self._pd_name_var.set(vals[0])
+            self._pd_email_var.set(vals[1])
+
+    def _pd_upsert(self):
+        name = self._pd_name_var.get().strip()
+        email = self._pd_email_var.get().strip()
+        if not name:
+            messagebox.showerror("Error", "El nombre no puede estar vacio.")
+            return
+        directory = load_directory()
+        directory[name] = email
+        if save_directory(directory):
+            self._pd_load()
+            self._pd_name_var.set("")
+            self._pd_email_var.set("")
+
+    def _pd_delete(self):
+        selection = self._personal_tree.selection()
+        if not selection:
+            return
+        name = self._personal_tree.item(selection[0], "values")[0]
+        directory = load_directory()
+        directory.pop(name, None)
+        if save_directory(directory):
+            self._pd_load()
 
     def _browse_db(self):
         path = filedialog.askopenfilename(
@@ -313,6 +385,7 @@ class SettingsView(tk.Frame):
                 var.set(config.get("alertas", key, fallback=""))
 
         self._load_frequencies()
+        self._pd_load()
 
     def refresh(self):
         pass
