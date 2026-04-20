@@ -18,9 +18,10 @@ from gui.widgets import ScrollableTreeview
 
 ALERT_COLUMNS = [
     ("tipo", "Tipo", 180),
-    ("mensaje", "Descripcion", 450),
+    ("mensaje", "Descripcion", 380),
     ("severidad", "Severidad", 80),
     ("timestamp", "Fecha", 130),
+    ("personal", "Personal", 150),
 ]
 
 
@@ -62,6 +63,8 @@ class AlertsView(tk.Frame):
 
         ttk.Button(btn_frame, text="Evaluar alertas",
                    command=self._evaluate_alerts).pack(side="left", padx=3)
+        ttk.Button(btn_frame, text="Asignar personal",
+                   command=self._assign_personal).pack(side="left", padx=3)
         ttk.Button(btn_frame, text="Enviar seleccionada",
                    command=self._send_selected).pack(side="left", padx=3)
         ttk.Button(btn_frame, text="Enviar todas pendientes",
@@ -103,12 +106,69 @@ class AlertsView(tk.Frame):
             tag = "vencido" if "vencido" in alert.tipo.lower() else (
                 "proximo" if "proximo" in alert.tipo.lower() or "upcoming" in alert.tipo.lower() else "")
 
+            personal = (", ".join(alert.orden.personal)
+                        if alert.orden and alert.orden.personal else "Sin asignar")
             self._table.insert_row((
                 alert.display_name,
                 alert.mensaje,
                 f"{alert.severidad:.0f}",
                 alert.timestamp.strftime("%d/%m/%Y %H:%M"),
+                personal,
             ), tag)
+
+    def _assign_personal(self):
+        selection = self._table.tree.selection()
+        if not selection:
+            messagebox.showwarning("Sin seleccion", "Seleccione una alerta para asignar personal.")
+            return
+
+        item = self._table.tree.item(selection[0])
+        msg = item["values"][1]
+        alert = next((a for a in self._alerts if a.mensaje == msg), None)
+        if not alert or not alert.orden:
+            messagebox.showwarning(
+                "Sin orden", "Esta alerta no tiene una orden de mantenimiento asociada.")
+            return
+
+        orden = alert.orden
+        personal_list = []
+        if self._controller and hasattr(self._controller, "get_personnel_list"):
+            personal_list = self._controller.get_personnel_list()
+
+        popup = tk.Toplevel(self)
+        popup.title(f"Asignar personal – OM #{orden.n_om}")
+        popup.geometry("400x230")
+        popup.resizable(False, False)
+        popup.grab_set()
+
+        frame = tk.Frame(popup, padx=20, pady=15)
+        frame.pack(fill="both", expand=True)
+
+        pm_vars = []
+        current = orden.personal + ["", "", ""]
+        for i, label in enumerate(("PM1", "PM2", "PM3")):
+            row = tk.Frame(frame)
+            row.pack(fill="x", pady=4)
+            tk.Label(row, text=f"{label}:", width=5, anchor="w").pack(side="left")
+            var = tk.StringVar(value=current[i])
+            combo = ttk.Combobox(row, textvariable=var, values=[""] + personal_list, width=30)
+            combo.pack(side="left", padx=(5, 0))
+            pm_vars.append(var)
+
+        def _save():
+            pm1, pm2, pm3 = (v.get().strip() for v in pm_vars)
+            if self._controller and hasattr(self._controller, "assign_personal"):
+                success = self._controller.assign_personal(orden.n_om, pm1, pm2, pm3)
+                if success:
+                    popup.destroy()
+                    messagebox.showinfo("Guardado", f"Personal actualizado para OM #{orden.n_om}.")
+                else:
+                    messagebox.showerror("Error", "No se pudo guardar en la base de datos.")
+
+        btn_row = tk.Frame(frame)
+        btn_row.pack(pady=(10, 0))
+        ttk.Button(btn_row, text="Guardar", command=_save).pack(side="left", padx=5)
+        ttk.Button(btn_row, text="Cancelar", command=popup.destroy).pack(side="left", padx=5)
 
     def _evaluate_alerts(self):
         if self._controller and hasattr(self._controller, "evaluate_alerts"):

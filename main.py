@@ -10,7 +10,7 @@ from datetime import datetime
 import schedule
 
 from core.alerts import create_default_registry, is_alert_in_cooldown, log_alert_sent
-from core.database import check_driver_installed, get_all_orders, get_all_pampo, load_config
+from core.database import check_driver_installed, get_all_orders, get_all_pampo, get_unique_personnel, load_config, update_personal
 from core.email_service import send_alert_email
 from core.models import Alert
 from core.urgency import load_pampo_frequencies, process_orders
@@ -128,6 +128,22 @@ class AppController:
 
         self.app.set_alerts_count(len(self.alerts))
         logger.info("Alerts evaluated: %d alerts found", len(self.alerts))
+
+    def get_personnel_list(self) -> list[str]:
+        """Return unique personnel names from the database."""
+        db_path = self.config.get("database", "path", fallback="")
+        if not db_path or not os.path.exists(db_path):
+            return []
+        return get_unique_personnel(db_path)
+
+    def assign_personal(self, n_om: int, pm1: str, pm2: str, pm3: str) -> bool:
+        """Write PM1/PM2/PM3 to Access and refresh the UI."""
+        db_path = self.config.get("database", "path", fallback="")
+        success = update_personal(db_path, n_om, pm1, pm2, pm3)
+        if success:
+            self.refresh_data()
+            self.evaluate_alerts()
+        return success
 
     def _update_smtp_config(self):
         alerts_view: AlertsView = self.app.get_view("alertas")

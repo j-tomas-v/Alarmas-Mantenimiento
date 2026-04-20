@@ -47,7 +47,6 @@ def get_connection_string(db_path: str) -> str:
     return (
         f"DRIVER={{{DRIVER_NAME}}};"
         f"DBQ={db_path};"
-        f"ReadOnly=1;"
     )
 
 
@@ -183,6 +182,43 @@ def get_all_orders(db_path: str, year_from: int = 2025) -> list[OrdenMantenimien
     except Exception as e:
         logger.error("Error reading orders: %s", e)
     return orders
+
+
+def get_unique_personnel(db_path: str) -> list[str]:
+    """Return a sorted list of unique personnel names from PM1, PM2, PM3 columns."""
+    conn_str = get_connection_string(db_path)
+    names: set[str] = set()
+    try:
+        conn = pyodbc.connect(conn_str)
+        cursor = conn.cursor()
+        cursor.execute("SELECT PM1, PM2, PM3 FROM [Base Orden Mantenimiento]")
+        for row in cursor.fetchall():
+            for val in row:
+                if val and str(val).strip():
+                    names.add(str(val).strip())
+        conn.close()
+    except Exception as e:
+        logger.error("Error reading personnel list: %s", e)
+    return sorted(names)
+
+
+def update_personal(db_path: str, n_om: int, pm1: str, pm2: str, pm3: str) -> bool:
+    """Update PM1, PM2, PM3 for the given order. Empty string clears the field."""
+    conn_str = get_connection_string(db_path)
+    try:
+        conn = pyodbc.connect(conn_str)
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE [Base Orden Mantenimiento] SET PM1=?, PM2=?, PM3=? WHERE [N°OM]=?",
+            pm1 or None, pm2 or None, pm3 or None, n_om,
+        )
+        conn.commit()
+        conn.close()
+        logger.info("Updated personal for OM #%d: PM1=%s PM2=%s PM3=%s", n_om, pm1, pm2, pm3)
+        return True
+    except Exception as e:
+        logger.error("Error updating personal for OM #%d: %s", n_om, e)
+        return False
 
 
 def load_config(config_path: str = "config.ini") -> configparser.ConfigParser:
