@@ -46,6 +46,23 @@ def _render_template(template_str: str, alert: Alert) -> str:
         return alert.mensaje
 
 
+def _connect_smtp(server_addr: str, port: int, use_tls: bool) -> smtplib.SMTP:
+    """Create and return an authenticated-ready SMTP connection."""
+    if use_tls and port == 465:
+        # Implicit SSL (SMTPS)
+        server = smtplib.SMTP_SSL(server_addr, port, timeout=15)
+        server.ehlo()
+    elif use_tls:
+        # STARTTLS (typically port 587)
+        server = smtplib.SMTP(server_addr, port, timeout=15)
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+    else:
+        server = smtplib.SMTP(server_addr, port, timeout=15)
+    return server
+
+
 def send_email(
     smtp_config: dict,
     recipients: list[str],
@@ -72,16 +89,9 @@ def send_email(
     msg.attach(MIMEText(body_html, "html", "utf-8"))
 
     try:
-        if use_tls:
-            server = smtplib.SMTP(server_addr, port, timeout=15)
-            server.ehlo()
-            server.starttls()
-        else:
-            server = smtplib.SMTP(server_addr, port, timeout=15)
-
+        server = _connect_smtp(server_addr, port, use_tls)
         if username and password:
             server.login(username, password)
-
         server.sendmail(from_addr, recipients, msg.as_string())
         server.quit()
         logger.info("Email sent to %s: %s", recipients, subject)
@@ -101,24 +111,33 @@ def send_alert_email(alert: Alert, smtp_config: dict, recipients: list[str], tem
 
 def test_smtp_connection(smtp_config: dict) -> tuple[bool, str]:
     """Test SMTP connection. Returns (success, message)."""
+    server_addr = smtp_config.get("server", "")
+    port_str = smtp_config.get("port", "587")
+    use_tls = smtp_config.get("use_tls", "true").lower() == "true"
+    username = smtp_config.get("username", "")
+    password = smtp_config.get("password", "")
+
+    if not server_addr:
+        return False, "El campo Servidor esta vacio."
+
     try:
-        server_addr = smtp_config.get("server", "")
-        port = int(smtp_config.get("port", 587))
-        use_tls = smtp_config.get("use_tls", "true").lower() == "true"
-        username = smtp_config.get("username", "")
-        password = smtp_config.get("password", "")
+        port = int(port_str)
+    except ValueError:
+        return False, f"Puerto invalido: '{port_str}'"
 
-        if use_tls:
-            server = smtplib.SMTP(server_addr, port, timeout=10)
-            server.ehlo()
-            server.starttls()
-        else:
-            server = smtplib.SMTP(server_addr, port, timeout=10)
-
+    ssl_mode = "SSL (puerto 465)" if port == 465 else "STARTTLS"
+    try:
+        server = _connect_smtp(server_addr, port, use_tls)
         if username and password:
             server.login(username, password)
-
         server.quit()
-        return True, "Conexion SMTP exitosa"
+        return True, f"Conexion SMTP exitosa ({ssl_mode})"
+    except smtplib.SMTPAuthenticationError:
+        return False, "Autenticacion fallida. Verifique usuario y contrasena."
+    except (TimeoutError, OSError) as e:
+        hint = (
+            " Verifique que el servidor y puerto sean correctos, y que el firewall permita la conexion."
+        )
+        return False, f"Error de conexion: {e}.{hint}"
     except Exception as e:
         return False, f"Error de conexion: {e}"
