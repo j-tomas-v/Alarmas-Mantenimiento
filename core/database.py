@@ -222,32 +222,33 @@ def update_personal(db_path: str, n_om: int, pm1: str, pm2: str, pm3: str) -> bo
 
 
 def close_order(db_path: str, n_om: int, fecha_realizacion: datetime = None) -> bool:
-    """Mark an order as completed in the Access database."""
+    """Mark an order as completed in the Access database.
+
+    Uses win32com/ADODB instead of pyodbc to avoid an unresolvable catch-22:
+    the Access ODBC driver counts both '¿' and '?' in [¿Finalizado?] as
+    parameter markers (→ expects 2), while pyodbc only counts the ASCII '?'
+    (→ expects 1). ADODB sends a plain SQL string with no parameter processing.
+    Requires: pip install pywin32
+    """
     if fecha_realizacion is None:
         fecha_realizacion = datetime.now()
-    conn_str = get_connection_string(db_path)
+    date_literal = f"#{fecha_realizacion.year}/{fecha_realizacion.month:02d}/{fecha_realizacion.day:02d}#"
+    sql = (
+        f"UPDATE [Base Orden Mantenimiento] "
+        f"SET [¿Finalizado?] = True, [Fecha realización] = {date_literal} "
+        f"WHERE [N°OM] = {n_om}"
+    )
     try:
-        conn = pyodbc.connect(conn_str)
-        cursor = conn.cursor()
-        date_literal = f"#{fecha_realizacion.year}/{fecha_realizacion.month:02d}/{fecha_realizacion.day:02d}#"
-        # The column [¿Finalizado?] contains a '?' that the Access ODBC driver
-        # counts as a parameter marker (same issue as SELECT queries — see
-        # get_all_orders() comments). We embed all real values as literals and
-        # pass one dummy value (True) so the parameter count matches the single
-        # '?' the driver finds in the column name.
-        query = (
-            "UPDATE [Base Orden Mantenimiento] "
-            f"SET [¿Finalizado?] = True, [Fecha realización] = {date_literal} "
-            f"WHERE [N°OM] = {n_om}"
-        )
-        # The Access ODBC driver counts BOTH '¿' and '?' in [¿Finalizado?] as
-        # parameter markers (total: 2). Pass two dummy True values to satisfy
-        # the count; all real values are already embedded as literals in the SQL.
-        cursor.execute(query, True, True)
-        conn.commit()
-        conn.close()
+        import win32com.client
+        conn_ado = win32com.client.Dispatch("ADODB.Connection")
+        conn_ado.Open(f"Provider=Microsoft.ACE.OLEDB.12.0;Data Source={db_path};")
+        conn_ado.Execute(sql)
+        conn_ado.Close()
         logger.info("Order #%d marked as completed on %s", n_om, fecha_realizacion.strftime("%d/%m/%Y"))
         return True
+    except ImportError:
+        logger.error("pywin32 no instalado. Ejecute: pip install pywin32")
+        return False
     except Exception as e:
         logger.error("Error closing order #%d: %s", n_om, e)
         return False
