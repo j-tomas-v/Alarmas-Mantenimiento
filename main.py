@@ -2,10 +2,12 @@
 
 import logging
 import os
+import socket
 import subprocess
 import sys
 import threading
 import time
+import webbrowser
 from datetime import datetime, timedelta
 
 import schedule
@@ -286,15 +288,55 @@ class AppController:
         """Launch the Flask web server as a subprocess if configured."""
         if not self.config.getboolean("web", "auto_start", fallback=False):
             return
+        self._start_web_server()
+
+    def _is_web_server_running(self) -> bool:
+        """Check whether something is already listening on the configured port."""
+        port = self.config.getint("web", "port", fallback=5000)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.3)
+            try:
+                s.connect(("127.0.0.1", port))
+                return True
+            except (socket.timeout, ConnectionRefusedError, OSError):
+                return False
+
+    def _start_web_server(self) -> bool:
+        """Start the Flask subprocess. Returns True if started or already running."""
+        if self._is_web_server_running():
+            logger.info("Web server already running on configured port")
+            return True
         try:
             self._web_process = subprocess.Popen(
                 [sys.executable, "-m", "web.server"],
                 cwd=os.path.dirname(os.path.abspath(__file__)),
             )
+            # Wait briefly so Flask can bind the port before we open the browser
+            for _ in range(20):  # up to ~3s
+                time.sleep(0.15)
+                if self._is_web_server_running():
+                    break
             port = self.config.getint("web", "port", fallback=5000)
             logger.info("Web dashboard started on port %d", port)
+            return True
         except Exception as e:
             logger.error("Failed to start web server: %s", e)
+            return False
+
+    def open_web_dashboard(self) -> bool:
+        """Start the web server (if not running) and open it in the default
+        browser. Called from the GUI button. Returns True on success."""
+        if not self._start_web_server():
+            return False
+        port = self.config.getint("web", "port", fallback=5000)
+        url = f"http://localhost:{port}/"
+        try:
+            webbrowser.open(url)
+            self.app.set_status(f"Dashboard web abierto: {url}")
+            return True
+        except Exception as e:
+            logger.error("Failed to open browser: %s", e)
+            return False
 
     def run(self):
         """Start the application main loop."""

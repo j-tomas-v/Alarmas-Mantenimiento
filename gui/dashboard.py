@@ -57,11 +57,21 @@ class DashboardView(tk.Frame):
         self._build_ui()
 
     def _build_ui(self):
-        # Title
+        # Title row with web-dashboard button on the right
+        title_row = tk.Frame(self, bg=COLOR_BG)
+        title_row.pack(fill="x", pady=(0, PADDING))
         tk.Label(
-            self, text="Dashboard", font=FONT_TITLE,
+            title_row, text="Dashboard", font=FONT_TITLE,
             fg=COLOR_TEXT, bg=COLOR_BG, anchor="w",
-        ).pack(fill="x", pady=(0, PADDING))
+        ).pack(side="left")
+        web_btn = tk.Button(
+            title_row, text="🌐  Abrir Dashboard Web",
+            bg="#3498DB", fg="white", font=("Segoe UI", 10, "bold"),
+            activebackground="#2980B9", activeforeground="white",
+            relief="flat", padx=12, pady=4, cursor="hand2",
+            command=self._open_web_dashboard,
+        )
+        web_btn.pack(side="right")
 
         # Summary cards row
         self._cards_frame = tk.Frame(self, bg=COLOR_BG)
@@ -255,6 +265,18 @@ class DashboardView(tk.Frame):
             popup.destroy()
         else:
             messagebox.showerror("Error", "No se pudo cerrar la orden. Revise el log.", parent=popup)
+
+    def _open_web_dashboard(self):
+        """Start the web server (if needed) and open it in the browser."""
+        if not self._controller or not hasattr(self._controller, "open_web_dashboard"):
+            messagebox.showerror("Error", "Funcion no disponible.")
+            return
+        if not self._controller.open_web_dashboard():
+            messagebox.showerror(
+                "Error",
+                "No se pudo iniciar el servidor web.\n"
+                "Verifique que Flask este instalado: pip install flask",
+            )
 
     def prompt_personal_for_new_order(
         self, new_n_om: int, maquina: str, actividad: str,
