@@ -52,6 +52,13 @@ class FilterPanel(tk.Frame):
         self.status_combo.pack(side="left", padx=(0, PADDING))
         self.status_combo.bind("<<ComboboxSelected>>", self._filter_changed)
 
+        # Latest per PAMPO checkbox
+        self.latest_pampo_var = tk.BooleanVar(value=False)
+        self.latest_pampo_check = ttk.Checkbutton(
+            self, text="Ultimo por PAMPO", variable=self.latest_pampo_var,
+            command=self._filter_changed)
+        self.latest_pampo_check.pack(side="left", padx=(PADDING, 0))
+
         # Refresh button
         refresh_btn = ttk.Button(self, text="Actualizar", command=self._filter_changed)
         refresh_btn.pack(side="right", padx=PADDING)
@@ -67,6 +74,7 @@ class FilterPanel(tk.Frame):
             "prioridad": self.priority_var.get(),
             "tipo": self.type_var.get(),
             "estado": self.status_var.get(),
+            "latest_per_pampo": self.latest_pampo_var.get(),
         }
 
     def _filter_changed(self, event=None):

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="{{ refresh_seconds }}">
+    <title>ATT Mantenimiento - Dashboard Planta</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        header {
+            background: #16213e;
+            padding: 18px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid #0f3460;
+        }
+        header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #e94560;
+        }
+        header .timestamp {
+            font-size: 16px;
+            color: #999;
+        }
+        .toggle-link {
+            color: #53a8b6;
+            text-decoration: none;
+            font-size: 14px;
+            margin-left: 20px;
+        }
+        .toggle-link:hover { text-decoration: underline; }
+
+        .cards {
+            display: flex;
+            gap: 20px;
+            padding: 20px 30px;
+        }
+        .card {
+            flex: 1;
+            background: #16213e;
+            border-radius: 10px;
+            padding: 20px 24px;
+            text-align: center;
+            border-left: 5px solid #555;
+        }
+        .card .number {
+            font-size: 48px;
+            font-weight: 800;
+            line-height: 1.1;
+        }
+        .card .label {
+            font-size: 16px;
+            color: #aaa;
+            margin-top: 4px;
+        }
+        .card-pendientes { border-left-color: #E74C3C; }
+        .card-pendientes .number { color: #E74C3C; }
+        .card-vencidos { border-left-color: #E74C3C; }
+        .card-vencidos .number { color: #E74C3C; }
+        .card-proximos { border-left-color: #F39C12; }
+        .card-proximos .number { color: #F39C12; }
+        .card-completados { border-left-color: #27AE60; }
+        .card-completados .number { color: #27AE60; }
+
+        .table-container {
+            padding: 0 30px 30px;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 15px;
+        }
+        thead th {
+            background: #0f3460;
+            color: #ddd;
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        tbody td {
+            padding: 10px;
+            border-bottom: 1px solid #2a2a4a;
+        }
+        tbody tr:hover { background: rgba(255,255,255,0.03); }
+
+        .row-vencido { background: rgba(231, 76, 60, 0.15); }
+        .row-vencido td:nth-child(9) { color: #E74C3C; font-weight: 700; }
+        .row-proximo { background: rgba(243, 156, 18, 0.12); }
+        .row-proximo td:nth-child(9) { color: #F39C12; font-weight: 700; }
+        .row-programado { background: rgba(39, 174, 96, 0.08); }
+        .row-programado td:nth-child(9) { color: #27AE60; font-weight: 700; }
+        .row-completado { background: rgba(149, 165, 166, 0.08); }
+        .row-completado td:nth-child(9) { color: #95A5A6; }
+
+        .badge-parada {
+            background: #E74C3C;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        footer {
+            text-align: center;
+            padding: 15px;
+            color: #555;
+            font-size: 13px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px;
+            color: #666;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div>
+            <h1>ATT Mantenimiento</h1>
+        </div>
+        <div>
+            {% if show_all %}
+                <a href="/" class="toggle-link">Ver ultimo por PAMPO</a>
+            {% else %}
+                <a href="/?all=1" class="toggle-link">Ver todas las ordenes</a>
+            {% endif %}
+            <span class="timestamp">Actualizado: {{ timestamp }}</span>
+        </div>
+    </header>
+
+    <div class="cards">
+        <div class="card card-pendientes">
+            <div class="number">{{ summary.total_pendientes }}</div>
+            <div class="label">Pendientes</div>
+        </div>
+        <div class="card card-vencidos">
+            <div class="number">{{ summary.vencidos }}</div>
+            <div class="label">Vencidos</div>
+        </div>
+        <div class="card card-proximos">
+            <div class="number">{{ summary.proximos }}</div>
+            <div class="label">Proximos</div>
+        </div>
+        <div class="card card-completados">
+            <div class="number">{{ summary.completados_mes }}</div>
+            <div class="label">Completados (mes)</div>
+        </div>
+    </div>
+
+    <div class="table-container">
+        {% if orders %}
+        <table>
+            <thead>
+                <tr>
+                    <th>N° OM</th>
+                    <th>Maquina</th>
+                    <th>Actividad</th>
+                    <th>Prioridad</th>
+                    <th>Tipo</th>
+                    <th>Fecha creacion</th>
+                    <th>Fecha limite</th>
+                    <th>Dias rest.</th>
+                    <th>Estado</th>
+                    <th>Personal</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for o in orders %}
+                <tr class="row-{{ o.estado.value | lower }}">
+                    <td>{{ o.n_om }}</td>
+                    <td>
+                        {{ o.maquina }}
+                        {% if o.con_parada %}<span class="badge-parada">PARADA</span>{% endif %}
+                    </td>
+                    <td>{{ o.actividad }}</td>
+                    <td>{{ o.prioridad.value }}</td>
+                    <td>{{ "Preventivo" if o.preventivo else ("Correctivo" if o.correctivo else "") }}</td>
+                    <td>{{ o.fecha.strftime("%d/%m/%Y") if o.fecha else "" }}</td>
+                    <td>{{ o.fecha_limite.strftime("%d/%m/%Y") if o.fecha_limite else "" }}</td>
+                    <td>{{ o.dias_restantes if not o.finalizado else "" }}</td>
+                    <td>{{ o.estado.value }}</td>
+                    <td>{{ o.personal | join(", ") if o.personal else "" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">No hay ordenes para mostrar.</div>
+        {% endif %}
+    </div>
+
+    <footer>
+        Sistema de Mantenimiento ATT &mdash; Auto-actualiza cada {{ refresh_seconds }}s
+    </footer>
+</body>
+</html>

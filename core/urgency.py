@@ -87,6 +87,15 @@ def process_orders(
     return sorted(orders, key=lambda o: o.severidad, reverse=True)
 
 
+def filter_latest_per_pampo(orders: list[OrdenMantenimiento]) -> list[OrdenMantenimiento]:
+    """Keep only the most recent order (highest n_om) for each unique id_pampo."""
+    latest: dict[int, OrdenMantenimiento] = {}
+    for o in orders:
+        if o.id_pampo and (o.id_pampo not in latest or o.n_om > latest[o.id_pampo].n_om):
+            latest[o.id_pampo] = o
+    return sorted(latest.values(), key=lambda o: o.severidad, reverse=True)
+
+
 def get_summary(orders: list[OrdenMantenimiento]) -> dict:
     """Get summary statistics from processed orders."""
     today = datetime.now()

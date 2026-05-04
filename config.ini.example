@@ -22,3 +22,9 @@ horario_inicio = 07:00
 horario_fin = 18:00
 dias_aviso_proximo = 7
 frecuencia_default_dias = 30
+
+[web]
+port = 5000
+host = 0.0.0.0
+refresh_seconds = 60
+auto_start = false

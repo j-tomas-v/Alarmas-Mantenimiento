@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 
 from core.models import EstadoUrgencia, OrdenMantenimiento, Prioridad
-from core.urgency import get_summary
+from core.urgency import filter_latest_per_pampo, get_summary
 from gui.filters import FilterPanel
 from gui.styles import (
     COLOR_BG, COLOR_COMPLETADO, COLOR_PROGRAMADO, COLOR_PROXIMO,
@@ -139,6 +139,9 @@ class DashboardView(tk.Frame):
                 filtered = [o for o in filtered
                             if o.estado.value == filters["estado"]]
 
+        if filters.get("latest_per_pampo"):
+            filtered = filter_latest_per_pampo(filtered)
+
         self._populate_table(filtered)
 
     def _populate_table(self, orders: list[OrdenMantenimiento]):
@@ -218,7 +221,35 @@ class DashboardView(tk.Frame):
             obs_text.insert("1.0", orden.observaciones)
             obs_text.config(state="disabled")
 
-        ttk.Button(popup, text="Cerrar", command=popup.destroy).pack(pady=10)
+        btn_frame = tk.Frame(popup)
+        btn_frame.pack(pady=10)
+        ttk.Button(btn_frame, text="Cerrar", command=popup.destroy).pack(side="left", padx=5)
+
+        if not orden.finalizado and self._controller:
+            finalizar_btn = tk.Button(
+                btn_frame, text="Finalizar Orden",
+                bg="#27AE60", fg="white", font=("Segoe UI", 10, "bold"),
+                activebackground="#219A52", activeforeground="white",
+                command=lambda: self._confirm_close_order(orden, popup),
+            )
+            finalizar_btn.pack(side="left", padx=5)
+
+    def _confirm_close_order(self, orden: OrdenMantenimiento, popup):
+        if not messagebox.askyesno(
+            "Confirmar",
+            f"¿Marcar OM #{orden.n_om} como finalizada?\n"
+            f"Maquina: {orden.maquina}\n"
+            f"Actividad: {orden.actividad}\n\n"
+            "Se registrará con la fecha de hoy.",
+            parent=popup,
+        ):
+            return
+        success = self._controller.close_order(orden.n_om)
+        if success:
+            messagebox.showinfo("Orden finalizada", f"OM #{orden.n_om} marcada como completada.", parent=popup)
+            popup.destroy()
+        else:
+            messagebox.showerror("Error", "No se pudo cerrar la orden. Revise el log.", parent=popup)
 
     def refresh(self):
         """Called when the view becomes visible."""

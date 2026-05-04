@@ -2,6 +2,7 @@
 
 import logging
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -10,7 +11,7 @@ from datetime import datetime
 import schedule
 
 from core.alerts import create_default_registry, is_alert_in_cooldown, log_alert_sent
-from core.database import check_driver_installed, get_all_orders, get_all_pampo, get_unique_personnel, load_config, update_personal
+from core.database import check_driver_installed, close_order as db_close_order, get_all_orders, get_all_pampo, get_unique_personnel, load_config, update_personal
 from core.email_service import send_alert_email
 from core.models import Alert
 from core.urgency import load_pampo_frequencies, process_orders
@@ -42,10 +43,12 @@ class AppController:
         self.orders = []
         self.alerts = []
         self._scheduler_running = False
+        self._web_process = None
 
         self._setup_views()
         self._load_initial_data()
         self._start_scheduler()
+        self._maybe_start_web_server()
 
     def _setup_views(self):
         # Register views with the app
@@ -136,6 +139,15 @@ class AppController:
             return []
         return get_unique_personnel(db_path)
 
+    def close_order(self, n_om: int, fecha_realizacion: datetime = None) -> bool:
+        """Mark an order as completed and refresh the UI."""
+        db_path = self.config.get("database", "path", fallback="")
+        success = db_close_order(db_path, n_om, fecha_realizacion)
+        if success:
+            self.refresh_data()
+            self.evaluate_alerts()
+        return success
+
     def assign_personal(self, n_om: int, pm1: str, pm2: str, pm3: str) -> bool:
         """Write PM1/PM2/PM3 to Access and refresh the UI."""
         db_path = self.config.get("database", "path", fallback="")
@@ -219,11 +231,28 @@ class AppController:
         if sent > 0:
             logger.info("Auto-sent %d alert emails", sent)
 
+    def _maybe_start_web_server(self):
+        """Launch the Flask web server as a subprocess if configured."""
+        if not self.config.getboolean("web", "auto_start", fallback=False):
+            return
+        try:
+            self._web_process = subprocess.Popen(
+                [sys.executable, "-m", "web.server"],
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+            )
+            port = self.config.getint("web", "port", fallback=5000)
+            logger.info("Web dashboard started on port %d", port)
+        except Exception as e:
+            logger.error("Failed to start web server: %s", e)
+
     def run(self):
         """Start the application main loop."""
         logger.info("Application starting")
         self.app.mainloop()
         self._scheduler_running = False
+        if self._web_process:
+            self._web_process.terminate()
+            logger.info("Web server stopped")
         logger.info("Application closed")
 
 

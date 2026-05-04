@@ -221,6 +221,30 @@ def update_personal(db_path: str, n_om: int, pm1: str, pm2: str, pm3: str) -> bo
         return False
 
 
+def close_order(db_path: str, n_om: int, fecha_realizacion: datetime = None) -> bool:
+    """Mark an order as completed in the Access database."""
+    if fecha_realizacion is None:
+        fecha_realizacion = datetime.now()
+    conn_str = get_connection_string(db_path)
+    try:
+        conn = pyodbc.connect(conn_str)
+        cursor = conn.cursor()
+        date_literal = f"#{fecha_realizacion.year}/{fecha_realizacion.month:02d}/{fecha_realizacion.day:02d}#"
+        query = (
+            "UPDATE [Base Orden Mantenimiento] "
+            f"SET [¿Finalizado?] = True, [Fecha realización] = {date_literal} "
+            f"WHERE [N°OM] = {n_om}"
+        )
+        cursor.execute(query)
+        conn.commit()
+        conn.close()
+        logger.info("Order #%d marked as completed on %s", n_om, fecha_realizacion.strftime("%d/%m/%Y"))
+        return True
+    except Exception as e:
+        logger.error("Error closing order #%d: %s", n_om, e)
+        return False
+
+
 def load_config(config_path: str = "config.ini") -> configparser.ConfigParser:
     """Load application configuration."""
     config = configparser.ConfigParser()
