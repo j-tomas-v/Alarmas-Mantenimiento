@@ -240,7 +240,10 @@ def close_order(db_path: str, n_om: int, fecha_realizacion: datetime = None) -> 
             f"SET [¿Finalizado?] = True, [Fecha realización] = {date_literal} "
             f"WHERE [N°OM] = {n_om}"
         )
-        cursor.execute(query, True)  # dummy True satisfies '?' count in column name
+        # The Access ODBC driver counts BOTH '¿' and '?' in [¿Finalizado?] as
+        # parameter markers (total: 2). Pass two dummy True values to satisfy
+        # the count; all real values are already embedded as literals in the SQL.
+        cursor.execute(query, True, True)
         conn.commit()
         conn.close()
         logger.info("Order #%d marked as completed on %s", n_om, fecha_realizacion.strftime("%d/%m/%Y"))
