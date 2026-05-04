@@ -3,18 +3,13 @@ import logging
 import os
 from datetime import datetime, timedelta
 
-from core.models import EstadoUrgencia, OrdenMantenimiento, Prioridad
+from core.models import EstadoUrgencia, OrdenMantenimiento
 
 logger = logging.getLogger(__name__)
 
-PRIORITY_MULTIPLIER = {
-    Prioridad.ALTA: 3,
-    Prioridad.MEDIA: 2,
-    Prioridad.BAJA: 1,
-    Prioridad.NINGUNA: 1,
-}
-
-PRODUCTION_STOP_BONUS = 50
+# Severity is now derived purely from days remaining: lower (more negative)
+# = more urgent. Priority and production-stop bonus were removed because the
+# user no longer relies on priority levels.
 
 
 def load_pampo_frequencies(path: str = "data/pampo_frequencies.json") -> dict[int, int]:
@@ -66,11 +61,8 @@ def calculate_urgency(
     else:
         orden.estado = EstadoUrgencia.PROGRAMADO
 
-    # Severity score (higher = more urgent)
-    base = -dias_restantes
-    mult = PRIORITY_MULTIPLIER[orden.prioridad]
-    bonus = PRODUCTION_STOP_BONUS if orden.con_parada else 0
-    orden.severidad = base * mult + bonus
+    # Severity = -days_remaining (overdue orders sort first)
+    orden.severidad = -dias_restantes
 
     return orden
 

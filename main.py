@@ -6,12 +6,12 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import schedule
 
 from core.alerts import create_default_registry, is_alert_in_cooldown, log_alert_sent
-from core.database import check_driver_installed, close_order as db_close_order, get_all_orders, get_all_pampo, get_unique_personnel, load_config, update_personal
+from core.database import check_driver_installed, close_order as db_close_order, create_order as db_create_order, get_all_orders, get_all_pampo, get_unique_personnel, load_config, update_personal
 from core.email_service import send_alert_email
 from core.models import Alert
 from core.urgency import load_pampo_frequencies, process_orders
@@ -140,13 +140,64 @@ class AppController:
         return get_unique_personnel(db_path)
 
     def close_order(self, n_om: int, fecha_realizacion: datetime = None) -> bool:
-        """Mark an order as completed and refresh the UI."""
+        """Mark an order as completed and, if it was the latest for its PAMPO,
+        auto-create the next scheduled order using the configured frequency.
+        Returns True if the close succeeded."""
         db_path = self.config.get("database", "path", fallback="")
+
+        # Find the order being closed BEFORE writing, to capture its current
+        # state (id_pampo, personal, preventivo/correctivo).
+        closed = next((o for o in self.orders if o.n_om == n_om), None)
+
         success = db_close_order(db_path, n_om, fecha_realizacion)
-        if success:
-            self.refresh_data()
-            self.evaluate_alerts()
-        return success
+        if not success:
+            return False
+
+        # Auto-generate next OM only if the closed one was the latest for its PAMPO
+        if closed and closed.id_pampo:
+            latest_for_pampo = max(
+                (o for o in self.orders if o.id_pampo == closed.id_pampo),
+                key=lambda o: o.n_om,
+                default=None,
+            )
+            if latest_for_pampo and latest_for_pampo.n_om == n_om:
+                self._auto_create_next_order(closed)
+
+        self.refresh_data()
+        self.evaluate_alerts()
+        return True
+
+    def _auto_create_next_order(self, closed_order):
+        """Create a new OM for the same PAMPO with frequency-based deadline.
+        If the closed order had personnel, prompt the user to confirm/edit it."""
+        db_path = self.config.get("database", "path", fallback="")
+        frequencies = load_pampo_frequencies()
+        default_freq = self.config.getint("alertas", "frecuencia_default_dias", fallback=30)
+        freq_days = frequencies.get(closed_order.id_pampo, default_freq)
+
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        new_deadline = today + timedelta(days=freq_days)
+
+        new_n_om = db_create_order(
+            db_path,
+            id_pampo=closed_order.id_pampo,
+            fecha=today,
+            fecha_limite=new_deadline,
+            preventivo=closed_order.preventivo,
+            correctivo=closed_order.correctivo,
+        )
+        if not new_n_om:
+            logger.error("No se pudo crear la nueva OM para PAMPO %d", closed_order.id_pampo)
+            return
+
+        # Only prompt for personnel if the closed order had any assigned
+        if closed_order.personal:
+            dashboard: DashboardView = self.app.get_view("dashboard")
+            if dashboard and hasattr(dashboard, "prompt_personal_for_new_order"):
+                dashboard.prompt_personal_for_new_order(
+                    new_n_om, closed_order.maquina, closed_order.actividad,
+                    closed_order.personal,
+                )
 
     def assign_personal(self, n_om: int, pm1: str, pm2: str, pm3: str) -> bool:
         """Write PM1/PM2/PM3 to Access and refresh the UI."""

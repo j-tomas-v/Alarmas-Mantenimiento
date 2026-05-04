@@ -22,16 +22,6 @@ class FilterPanel(tk.Frame):
         self.machine_combo.pack(side="left", padx=(0, PADDING))
         self.machine_combo.bind("<<ComboboxSelected>>", self._filter_changed)
 
-        # Priority filter
-        tk.Label(self, text="Prioridad:", font=FONT_SMALL, bg=COLOR_CARD_BG).pack(
-            side="left", padx=(PADDING, 2))
-        self.priority_var = tk.StringVar(value="Todas")
-        self.priority_combo = ttk.Combobox(
-            self, textvariable=self.priority_var, state="readonly", width=12,
-            values=["Todas", "Alta", "Media", "Baja", "Sin prioridad"])
-        self.priority_combo.pack(side="left", padx=(0, PADDING))
-        self.priority_combo.bind("<<ComboboxSelected>>", self._filter_changed)
-
         # Type filter
         tk.Label(self, text="Tipo:", font=FONT_SMALL, bg=COLOR_CARD_BG).pack(
             side="left", padx=(PADDING, 2))
@@ -71,7 +61,6 @@ class FilterPanel(tk.Frame):
     def get_filters(self) -> dict:
         return {
             "maquina": self.machine_var.get(),
-            "prioridad": self.priority_var.get(),
             "tipo": self.type_var.get(),
             "estado": self.status_var.get(),
             "latest_per_pampo": self.latest_pampo_var.get(),

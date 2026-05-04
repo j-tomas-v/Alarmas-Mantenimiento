@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from typing import Optional
 
-from core.models import Alert, EstadoUrgencia, MileageRecord, OrdenMantenimiento, Prioridad
+from core.models import Alert, EstadoUrgencia, MileageRecord, OrdenMantenimiento
 from core.personal_directory import get_emails_for
 
 logger = logging.getLogger(__name__)
@@ -60,8 +60,7 @@ class OverdueMaintenanceEvaluator(AlertEvaluator):
                     orden=o,
                     mensaje=(
                         f"OM #{o.n_om} - {o.maquina}: {o.actividad} "
-                        f"vencido hace {abs(o.dias_restantes)} dias "
-                        f"(Prioridad: {o.prioridad.value})"
+                        f"vencido hace {abs(o.dias_restantes)} dias"
                     ),
                     severidad=o.severidad,
                 ))
@@ -85,8 +84,7 @@ class UpcomingMaintenanceEvaluator(AlertEvaluator):
                     orden=o,
                     mensaje=(
                         f"OM #{o.n_om} - {o.maquina}: {o.actividad} "
-                        f"vence en {o.dias_restantes} dias "
-                        f"(Prioridad: {o.prioridad.value})"
+                        f"vence en {o.dias_restantes} dias"
                     ),
                     severidad=o.severidad,
                 ))
@@ -162,32 +160,6 @@ class VehicleMileageRequestEvaluator(AlertEvaluator):
             return []
 
 
-class HighPriorityUnassignedEvaluator(AlertEvaluator):
-    alert_type = "high_priority_unassigned"
-    display_name = "Alta prioridad sin asignar"
-
-    def evaluate(self, orders, config):
-        alerts = []
-        for o in orders:
-            if (o.prioridad == Prioridad.ALTA
-                    and not o.finalizado
-                    and not o.personal):
-                alerts.append(Alert(
-                    tipo=self.alert_type,
-                    display_name=self.display_name,
-                    orden=o,
-                    mensaje=(
-                        f"OM #{o.n_om} - {o.maquina}: {o.actividad} "
-                        f"es de ALTA prioridad y no tiene personal asignado"
-                    ),
-                    severidad=o.severidad + 25,
-                ))
-        return alerts
-
-    def get_email_template(self):
-        return "overdue_alert.html"
-
-
 class AlertRegistry:
     """Central registry for alert evaluators."""
 
@@ -223,7 +195,6 @@ def create_default_registry() -> AlertRegistry:
     registry.register(OverdueMaintenanceEvaluator())
     registry.register(UpcomingMaintenanceEvaluator())
     registry.register(VehicleMileageRequestEvaluator())
-    registry.register(HighPriorityUnassignedEvaluator())
     return registry
 
 

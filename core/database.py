@@ -221,6 +221,50 @@ def update_personal(db_path: str, n_om: int, pm1: str, pm2: str, pm3: str) -> bo
         return False
 
 
+def create_order(
+    db_path: str,
+    id_pampo: int,
+    fecha: datetime,
+    fecha_limite: datetime,
+    preventivo: bool = True,
+    correctivo: bool = False,
+) -> Optional[int]:
+    """Insert a new maintenance order and return its auto-generated N°OM, or None on failure.
+
+    Uses ADODB via win32com (same as close_order) to avoid the pyodbc/ODBC
+    parameter-marker conflict caused by [¿Finalizado?]. After INSERT, queries
+    @@IDENTITY in the same connection to retrieve the new order number.
+    """
+    fecha_lit = f"#{fecha.year}/{fecha.month:02d}/{fecha.day:02d}#"
+    fecha_limite_lit = f"#{fecha_limite.year}/{fecha_limite.month:02d}/{fecha_limite.day:02d}#"
+    sql_insert = (
+        "INSERT INTO [Base Orden Mantenimiento] "
+        "([Fecha], [ID PAMPO], [Preventivo], [Correctivo], [Realizar el día]) "
+        f"VALUES ({fecha_lit}, {id_pampo}, "
+        f"{'True' if preventivo else 'False'}, {'True' if correctivo else 'False'}, "
+        f"{fecha_limite_lit})"
+    )
+    try:
+        import win32com.client
+        conn_ado = win32com.client.Dispatch("ADODB.Connection")
+        conn_ado.Open(f"Provider=Microsoft.ACE.OLEDB.12.0;Data Source={db_path};")
+        conn_ado.Execute(sql_insert)
+        # Retrieve the auto-generated N°OM
+        rs, _ = conn_ado.Execute("SELECT @@IDENTITY")
+        new_n_om = int(rs.Fields(0).Value) if not rs.EOF else None
+        rs.Close()
+        conn_ado.Close()
+        logger.info("Created new order #%s for PAMPO %d (deadline %s)",
+                    new_n_om, id_pampo, fecha_limite.strftime("%d/%m/%Y"))
+        return new_n_om
+    except ImportError:
+        logger.error("pywin32 no instalado. Ejecute: pip install pywin32")
+        return None
+    except Exception as e:
+        logger.error("Error creating new order for PAMPO %d: %s", id_pampo, e)
+        return None
+
+
 def close_order(db_path: str, n_om: int, fecha_realizacion: datetime = None) -> bool:
     """Mark an order as completed in the Access database.
 

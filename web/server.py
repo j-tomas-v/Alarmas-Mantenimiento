@@ -41,7 +41,6 @@ def _serialize_order(o):
         "n_om": o.n_om,
         "maquina": o.maquina,
         "actividad": o.actividad,
-        "prioridad": o.prioridad.value,
         "tipo": "Preventivo" if o.preventivo else ("Correctivo" if o.correctivo else ""),
         "fecha": o.fecha.strftime("%d/%m/%Y") if o.fecha else "",
         "fecha_limite": o.fecha_limite.strftime("%d/%m/%Y") if o.fecha_limite else "",

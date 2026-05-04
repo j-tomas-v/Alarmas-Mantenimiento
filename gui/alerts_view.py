@@ -18,8 +18,7 @@ from gui.widgets import ScrollableTreeview
 
 ALERT_COLUMNS = [
     ("tipo", "Tipo", 180),
-    ("mensaje", "Descripcion", 380),
-    ("severidad", "Severidad", 80),
+    ("mensaje", "Descripcion", 460),
     ("timestamp", "Fecha", 130),
     ("personal", "Personal", 150),
 ]
@@ -111,7 +110,6 @@ class AlertsView(tk.Frame):
             self._table.insert_row((
                 alert.display_name,
                 alert.mensaje,
-                f"{alert.severidad:.0f}",
                 alert.timestamp.strftime("%d/%m/%Y %H:%M"),
                 personal,
             ), tag)
