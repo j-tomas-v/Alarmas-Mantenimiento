@@ -9,12 +9,15 @@
 2. [Instalación en la PC de desarrollo (macOS)](#2-instalación-en-la-pc-de-desarrollo-macos)
 3. [Instalación en Windows (producción)](#3-instalación-en-windows-producción)
 4. [Configuración inicial](#4-configuración-inicial)
-5. [Frecuencias PAMPO](#5-frecuencias-pampo)
-6. [Compilar a .exe](#6-compilar-a-exe)
-7. [Distribución en la empresa](#7-distribución-en-la-empresa)
-8. [Agregar nuevos tipos de alerta](#8-agregar-nuevos-tipos-de-alerta)
-9. [Estructura del proyecto](#9-estructura-del-proyecto)
-10. [Solución de problemas](#10-solución-de-problemas)
+5. [Dashboard Web (pantalla de planta)](#5-dashboard-web-pantalla-de-planta)
+6. [Cierre y auto-creación de OM](#6-cierre-y-auto-creación-de-om)
+7. [Frecuencias PAMPO](#7-frecuencias-pampo)
+8. [Compilar a .exe](#8-compilar-a-exe)
+9. [Distribución en la empresa](#9-distribución-en-la-empresa)
+10. [Agregar nuevos tipos de alerta](#10-agregar-nuevos-tipos-de-alerta)
+11. [Estructura del proyecto](#11-estructura-del-proyecto)
+12. [Solución de problemas](#12-solución-de-problemas)
+13. [Directorio de personal y asignación de emails](#13-directorio-de-personal-y-asignación-de-emails)
 
 ---
 
@@ -60,9 +63,13 @@ Contenido de `requirements.txt`:
 pyodbc>=4.0.39
 schedule>=1.2.0
 tkcalendar>=1.6.1
+flask>=3.0.0
+pywin32>=306
 ```
 
-> **Nota macOS:** `pyodbc` en macOS no puede conectarse a Access (requiere driver ODBC de Microsoft, solo disponible en Windows). Para desarrollo en Mac podés probar la GUI sin conexión real a la DB, o usar una VM Windows.
+> **Nota macOS:** `pyodbc` en macOS no puede conectarse a Access (requiere driver ODBC de Microsoft, solo disponible en Windows). `pywin32` directamente no se instala en macOS. Para desarrollo en Mac podés probar la GUI sin conexión real a la DB, o usar una VM Windows.
+
+> **¿Por qué `pywin32`?** El cierre de OM y la creación automática de la siguiente orden no se pueden hacer con pyodbc por un conflicto de marcadores `?` en el nombre de columna `[¿Finalizado?]` de Access. La solución usa ADODB vía `win32com` (parte de `pywin32`).
 
 ### 2.4 Verificar instalación
 
@@ -102,6 +109,9 @@ mkdir C:\ATT_Mantenimiento
 :: Instalar dependencias
 cd C:\ATT_Mantenimiento
 pip install -r requirements.txt
+
+:: Si COM/ADODB falla al cerrar OM, ejecutar el post-install de pywin32:
+python -m pywin32_postinstall -install
 
 :: Ejecutar
 python main.py
@@ -184,6 +194,20 @@ frecuencia_default_dias = 30
 ; Horario laboral en que se envían emails automáticos
 horario_inicio = 07:00
 horario_fin = 18:00
+
+[web]
+; Puerto del dashboard web
+port = 5000
+
+; 0.0.0.0 = accesible desde otras PC en la red. 127.0.0.1 = solo local.
+host = 0.0.0.0
+
+; Cada cuántos segundos auto-actualiza el navegador
+refresh_seconds = 60
+
+; Si true, arranca el servidor web automáticamente al abrir la app.
+; Si false, hay que iniciarlo con el botón "🌐 Abrir Dashboard Web".
+auto_start = false
 ```
 
 ### 4.2 Ruta a la base de datos
@@ -196,7 +220,112 @@ Si la DB está en un servidor de red, asegurarse de que la PC tenga permisos de 
 
 ---
 
-## 5. Frecuencias PAMPO
+## 5. Dashboard Web (pantalla de planta)
+
+Además del dashboard de escritorio (Tkinter), el sistema incluye un dashboard web servido por Flask, pensado para mostrarse permanentemente en una TV o monitor industrial vía navegador.
+
+### 5.1 Cómo arrancarlo
+
+**Opción A — Botón en la app (recomendado para uso diario):**
+
+1. Abrir la app Tkinter
+2. En el dashboard hacer clic en el botón "🌐 Abrir Dashboard Web" (esquina superior derecha)
+3. Se abre el navegador automáticamente en `http://localhost:5000/`
+
+**Opción B — Standalone (sin abrir la app gráfica):**
+
+```cmd
+cd C:\ATT_Mantenimiento
+python -m web.server
+```
+
+**Opción C — Auto-arranque al abrir la app:**
+
+Setear en `config.ini`:
+```ini
+[web]
+auto_start = true
+```
+
+### 5.2 Acceder desde otra PC
+
+Si `host = 0.0.0.0` (default), el dashboard es accesible desde cualquier dispositivo en la misma red:
+
+```
+http://<ip-de-la-pc-server>:5000
+```
+
+Para conocer la IP en Windows: ejecutar `ipconfig` y buscar "Dirección IPv4" (típicamente `192.168.x.x`).
+
+### 5.3 Vistas disponibles
+
+- **Por defecto:** muestra solo la última orden de cada PAMPO (vista de "estado actual de cada equipo")
+- **Toggle "Ver todas las ordenes":** link en la esquina superior derecha. Muestra todas las órdenes pendientes
+- **Auto-refresh:** cada 60 segundos (configurable en `refresh_seconds`)
+
+### 5.4 Mostrar el dashboard en pantalla externa vía HDMI
+
+Caso típico: conectar la PC de Control de Calidad a una TV/monitor de planta por cable HDMI.
+
+**Pasos:**
+
+1. **Conectar el cable HDMI** entre la PC y la pantalla de planta
+2. **Configurar Windows** para usar dos pantallas:
+   - Presionar `Win + P` → seleccionar **"Extender"** (recomendado, no "Duplicar")
+   - Esto permite que la pantalla de planta sea independiente de la principal
+3. **Abrir el dashboard web** desde la app (botón "🌐 Abrir Dashboard Web")
+   - Se abre en la pantalla principal
+4. **Arrastrar la ventana del navegador** hacia la pantalla de planta
+5. **Pantalla completa:** presionar `F11` → el navegador entra en modo full screen y oculta toolbars
+6. *(Opcional)* Ajustar resolución/escalado en **Configuración → Sistema → Pantalla** para que sea legible a distancia
+
+**Tips operativos:**
+
+- Dejar la PC y el navegador siempre abiertos. El auto-refresh actualiza solo cada 60s, no hay que tocar nada
+- Si la pantalla de planta muestra **"localhost rechazó la conexión"**: significa que el server no está corriendo. Volver a la PC y hacer clic en "🌐 Abrir Dashboard Web"
+- Para que el server arranque automáticamente al prender la PC: poner `auto_start = true` en la sección `[web]` de `config.ini`
+- Si la pantalla externa se queda en negro tras un rato: deshabilitar suspensión del monitor en **Configuración → Sistema → Energía → Pantalla**
+- El dashboard funciona en cualquier navegador moderno (Chrome, Edge, Firefox)
+
+---
+
+## 6. Cierre y auto-creación de OM
+
+### 6.1 Cerrar una orden manualmente
+
+1. En el Dashboard, hacer **doble-clic** sobre la fila de la orden a cerrar
+2. En el popup de detalle, presionar el botón verde **"Finalizar Orden"**
+3. Confirmar el diálogo
+4. La orden queda marcada como completada en Access (`¿Finalizado?` = Sí, `Fecha realización` = hoy)
+
+### 6.2 Auto-creación de la siguiente OM
+
+Si la orden cerrada **era la última registrada para ese ID PAMPO**, el sistema crea automáticamente la siguiente:
+- `Fecha` = hoy
+- `Realizar el día` = hoy + frecuencia (de `data/pampo_frequencies.json`)
+- `Preventivo` / `Correctivo` = mismos valores que la cerrada
+- Resto de campos vacíos/default
+
+### 6.3 Diálogo de personal en auto-creación
+
+Si la orden cerrada tenía personal asignado (PM1/PM2/PM3), el sistema abre un popup precargado con esos nombres para que el usuario los confirme/edite para la nueva orden.
+- Botón **"Guardar"**: asigna el personal a la nueva OM
+- Botón **"Omitir"**: la nueva OM queda sin personal
+
+Si la orden cerrada no tenía personal, no se muestra ningún diálogo (la nueva OM queda sin personal sin preguntar).
+
+### 6.4 Limitación técnica — pywin32 obligatorio
+
+El UPDATE para cerrar una orden referencia la columna `[¿Finalizado?]` que tiene caracteres `¿` y `?`. El driver Access ODBC y pyodbc cuentan estos caracteres distinto como marcadores de parámetro, generando un conflicto irresoluble. Por eso, `close_order()` y `create_order()` usan ADODB vía `win32com.client` (de la librería `pywin32`), que envía el SQL como string puro sin procesamiento de marcadores.
+
+Si al cerrar una orden aparece el error `"pywin32 no instalado"`, ejecutar:
+```cmd
+pip install pywin32
+```
+
+---
+
+## 7. Frecuencias PAMPO
 
 El archivo `data/pampo_frequencies.json` define cada cuántos días debe realizarse cada actividad. Ya viene pre-cargado con 56 entradas basadas en el PAMPO actual.
 
@@ -232,17 +361,17 @@ Editar `data/pampo_frequencies.json` con cualquier editor de texto. Recordar:
 
 ---
 
-## 6. Compilar a .exe
+## 8. Compilar a .exe
 
 Para distribuir sin necesidad de instalar Python en cada PC.
 
-### 6.1 Instalar PyInstaller
+### 8.1 Instalar PyInstaller
 
 ```cmd
 pip install pyinstaller
 ```
 
-### 6.2 Compilar (desde Windows)
+### 8.2 Compilar (desde Windows)
 
 ```cmd
 cd C:\ATT_Mantenimiento
@@ -253,6 +382,8 @@ pyinstaller ^
   --name "ATT_Mantenimiento" ^
   --add-data "templates;templates" ^
   --add-data "data;data" ^
+  --add-data "web/templates;web/templates" ^
+  --hidden-import "win32com.client" ^
   main.py
 ```
 
@@ -262,13 +393,13 @@ pyinstaller ^
 - `--name`: nombre del ejecutable resultante
 - `--add-data`: incluye las carpetas `templates/` y `data/` dentro del exe
 
-### 6.3 Resultado
+### 8.3 Resultado
 
 El `.exe` se genera en `dist/ATT_Mantenimiento.exe`.
 
 > **Importante:** El `config.ini` y los archivos de `data/` deben estar en la **misma carpeta que el .exe** para que sean editables. Si se incluyen dentro del exe con `--add-data`, se extraen a una carpeta temporal y los cambios no se guardan entre sesiones.
 
-### 6.4 Estructura recomendada para distribución
+### 8.4 Estructura recomendada para distribución
 
 ```
 ATT_Mantenimiento/           ← carpeta que se copia a cada PC
@@ -287,7 +418,7 @@ ATT_Mantenimiento/           ← carpeta que se copia a cada PC
 
 ---
 
-## 7. Distribución en la empresa
+## 9. Distribución en la empresa
 
 ### Opción A: Carpeta compartida en red (recomendado)
 
@@ -313,7 +444,7 @@ Copiar toda la carpeta a `C:\ATT_Mantenimiento\` en cada PC y crear acceso direc
 
 ---
 
-## 8. Agregar nuevos tipos de alerta
+## 10. Agregar nuevos tipos de alerta
 
 El sistema usa un patrón Strategy + Registry. Agregar un nuevo tipo de alerta requiere solo crear una clase nueva, sin tocar el código existente.
 
@@ -354,7 +485,6 @@ def create_default_registry() -> AlertRegistry:
     registry.register(OverdueMaintenanceEvaluator())
     registry.register(UpcomingMaintenanceEvaluator())
     registry.register(VehicleMileageRequestEvaluator())
-    registry.register(HighPriorityUnassignedEvaluator())
     registry.register(SinObservacionesEvaluator())  # ← nueva línea
     return registry
 ```
@@ -363,7 +493,7 @@ Eso es todo. El nuevo evaluador aparecerá automáticamente en la vista de Alert
 
 ---
 
-## 9. Estructura del proyecto
+## 11. Estructura del proyecto
 
 ```
 ATT_alarmas_mantenimiento/
@@ -395,6 +525,12 @@ ATT_alarmas_mantenimiento/
 │   ├── overdue_alert.html
 │   ├── upcoming_alert.html
 │   └── vehicle_request.html
+│
+├── web/                          # Dashboard web (Flask) para pantalla de planta
+│   ├── __init__.py
+│   ├── server.py                 # Servidor Flask + rutas / y /api/orders
+│   └── templates/
+│       └── dashboard.html        # Template Jinja2 — auto-refresh 60s, tema oscuro
 │
 ├── data/                            # Datos locales (NO son la DB Access)
 │   ├── pampo_frequencies.json       # Frecuencias por ID PAMPO
@@ -428,7 +564,7 @@ Archivo .accdb (Access)
 
 ---
 
-## 10. Solución de problemas
+## 12. Solución de problemas
 
 ### Error: "Driver ODBC no encontrado"
 
@@ -512,6 +648,53 @@ carpeta_distribucion/
 
 ---
 
+### "localhost rechazó la conexión" al abrir el dashboard web
+
+El servidor Flask no está corriendo. Soluciones:
+- Hacer clic en el botón **"🌐 Abrir Dashboard Web"** en la app
+- O ejecutar manualmente: `python -m web.server` desde la raíz del proyecto
+- O setear `auto_start = true` en `config.ini` → `[web]` para que arranque solo
+
+---
+
+### Error "pywin32 no instalado" al cerrar una OM
+
+```
+ERROR: pywin32 no instalado. Ejecute: pip install pywin32
+```
+
+**Solución:**
+```cmd
+pip install pywin32
+python -m pywin32_postinstall -install
+```
+
+Reiniciar la app después.
+
+---
+
+### "No module named 'web'" al ejecutar `python -m web.server`
+
+El comando se está ejecutando desde la carpeta equivocada. **Solución:**
+```cmd
+cd C:\ATT_Mantenimiento
+python -m web.server
+```
+
+Desde la raíz del proyecto (donde está `main.py` y la carpeta `web/`).
+
+---
+
+### El dashboard web no muestra datos / muestra datos viejos
+
+El servidor lee el `.accdb` cada vez que se abre la página. Si los datos no se actualizan:
+- Verificar que `[database] path` en `config.ini` apunte al archivo correcto
+- Verificar que el navegador no esté cacheando: usar `Ctrl + F5` para forzar refresco
+- Verificar que el auto-refresh esté activo (debería recargarse cada 60s)
+- Revisar `att_mantenimiento.log` por errores de conexión a la DB
+
+---
+
 ### Regenerar el PDF de la guía de usuario
 
 Si se actualiza la guía o se cambia el contenido:
@@ -524,9 +707,9 @@ python3 docs/generar_guia_usuario.py
 
 ---
 
-## 11. Directorio de personal y asignación de emails
+## 13. Directorio de personal y asignación de emails
 
-### 11.1 Archivo `data/personal_directory.json`
+### 13.1 Archivo `data/personal_directory.json`
 
 Mapea el nombre de cada técnico con su dirección de email. Se crea automáticamente al guardar desde la app.
 
@@ -537,14 +720,14 @@ Mapea el nombre de cada técnico con su dirección de email. Se crea automática
 }
 ```
 
-### 11.2 Gestionar desde la app
+### 13.2 Gestionar desde la app
 
 1. Ir a **Configuración** → sección **Directorio de Personal**
 2. Ingresar nombre y email en los campos inferiores
 3. Presionar **"Agregar / Actualizar"** para guardar
 4. Para eliminar: seleccionar una fila y presionar **"Eliminar seleccionado"**
 
-### 11.3 Asignar personal a una orden desde Alertas
+### 13.3 Asignar personal a una orden desde Alertas
 
 1. Ir a **Alertas** → presionar **"Evaluar alertas"**
 2. Seleccionar una alerta con orden asociada
@@ -552,7 +735,7 @@ Mapea el nombre de cada técnico con su dirección de email. Se crea automática
 4. En el diálogo, seleccionar PM1/PM2/PM3 de los dropdowns (se autocompletan con los nombres del directorio)
 5. Presionar **"Guardar"** — escribe PM1/PM2/PM3 directamente en Access y actualiza la UI
 
-### 11.4 Flujo de destinatarios al enviar una alerta
+### 13.4 Flujo de destinatarios al enviar una alerta
 
 Cuando se envía una alerta de una orden, los destinatarios son:
 1. El grupo base configurado en `config.ini` → `[recipients]` → `mantenimiento`
@@ -560,7 +743,7 @@ Cuando se envía una alerta de una orden, los destinatarios son:
 
 Si un técnico no tiene email registrado en el directorio, simplemente se omite.
 
-### 11.5 Módulo `core/personal_directory.py`
+### 13.5 Módulo `core/personal_directory.py`
 
 | Función | Descripción |
 |---|---|
@@ -570,4 +753,4 @@ Si un técnico no tiene email registrado en el directorio, simplemente se omite.
 
 ---
 
-*Guía de Implementación v1.1 — Abril 2026*
+*Guía de Implementación v1.2 — Mayo 2026*

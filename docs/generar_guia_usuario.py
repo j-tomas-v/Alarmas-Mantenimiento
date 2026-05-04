@@ -186,14 +186,14 @@ def build_pdf():
     story.append(Spacer(1, 0.5 * cm))
     story.append(Paragraph("Equipo de Control de Calidad", styles["CoverSubtitle"]))
     story.append(Spacer(1, 2 * cm))
-    story.append(Paragraph("Abril 2026", ParagraphStyle(
+    story.append(Paragraph("Mayo 2026", ParagraphStyle(
         "date", fontName="Helvetica", fontSize=12, alignment=TA_CENTER, textColor=GRAY)))
     story.append(Spacer(1, 1 * cm))
 
     # Version info
     version_style = ParagraphStyle("ver", fontName="Helvetica", fontSize=9,
                                    alignment=TA_CENTER, textColor=GRAY)
-    story.append(Paragraph("Version 1.1", version_style))
+    story.append(Paragraph("Version 1.2", version_style))
 
     story.append(PageBreak())
 
@@ -207,9 +207,11 @@ def build_pdf():
         ("3.", "Alertas y Asignacion de Personal"),
         ("4.", "Vehiculos - Registro de Kilometraje"),
         ("5.", "Configuracion"),
-        ("6.", "Significado de Colores y Prioridades"),
+        ("6.", "Significado de Colores y Dias Restantes"),
         ("7.", "Emails Automaticos"),
-        ("8.", "Preguntas Frecuentes"),
+        ("8.", "Cerrar Ordenes y Auto-Creacion"),
+        ("9.", "Dashboard Web (Pantalla de Planta)"),
+        ("10.", "Preguntas Frecuentes"),
     ]
     for num, title in toc_items:
         story.append(Paragraph(
@@ -339,13 +341,17 @@ def build_pdf():
     story.append(Spacer(1, 0.3 * cm))
 
     story.append(Paragraph(
-        "Las columnas de la tabla son: N. de OM, Maquina, Actividad, Prioridad, Tipo, "
-        "Fecha de creacion, Fecha limite, Dias restantes, Estado y Personal asignado.",
+        "Las columnas de la tabla son: <b>N. de OM</b>, <b>Dias restantes</b>, Maquina, Actividad, "
+        "Tipo, Fecha de creacion, Fecha limite, Estado y Personal asignado. "
+        "La columna <b>Dias restantes</b> esta ubicada en la segunda posicion (justo despues de "
+        "N. de OM) porque es el dato operativo mas importante: indica cuanto falta para que "
+        "venza la proxima orden de cada equipo.",
         styles["BodyText2"]))
 
     story.append(Paragraph(
         "<b>Detalle de una orden:</b> Haga <b>doble click</b> sobre cualquier fila para abrir "
-        "una ventana emergente con toda la informacion de esa orden de mantenimiento.",
+        "una ventana emergente con toda la informacion de esa orden de mantenimiento. "
+        "Desde alli tambien puede <b>finalizar</b> una orden con el boton verde 'Finalizar Orden'.",
         styles["BodyText2"]))
 
     # 2.3 Filters
@@ -357,15 +363,24 @@ def build_pdf():
 
     filters = [
         "<b>Maquina:</b> Filtrar por una maquina o equipo especifico (ej: Barnizadora, Troqueladora YIGUO).",
-        "<b>Prioridad:</b> Mostrar solo ordenes de prioridad Alta, Media, Baja o Sin prioridad.",
         "<b>Tipo:</b> Filtrar entre mantenimientos Preventivos o Correctivos.",
         "<b>Estado:</b> Filtrar por Pendientes (default), Vencido, Proximo, Programado, Completado o Todos.",
+        "<b>Solo ultimo por PAMPO:</b> Checkbox que muestra unicamente la orden mas reciente de "
+        "cada procedimiento. Util para ver el estado actual de cada equipo de un vistazo.",
     ]
     for f in filters:
         story.append(Paragraph(f"\u2022  {f}", styles["BulletItem"]))
 
     story.append(Paragraph(
         'Presione el boton <b>"Actualizar"</b> para refrescar los datos desde la base de datos Access.',
+        styles["BodyText2"]))
+
+    story.append(Paragraph("2.4 Boton 'Abrir Dashboard Web'", styles["SubSection"]))
+    story.append(Paragraph(
+        'En la esquina superior derecha del Dashboard hay un boton azul <b>"&#127760; Abrir Dashboard Web"</b>. '
+        'Al presionarlo, el sistema arranca un servidor web local (si no estaba activo) y abre el '
+        'navegador con una vista optimizada para mostrar en una pantalla de planta. Ver la seccion 9 '
+        'para mas detalles sobre como usar y configurar este dashboard.',
         styles["BodyText2"]))
 
     story.append(PageBreak())
@@ -388,8 +403,6 @@ def build_pdf():
         ["Mantenimiento proximo", "Se genera cuando una orden vence dentro de los proximos 7 dias."],
         ["Solicitud de kilometraje",
          "Se genera cuando un vehiculo no tiene registros de km recientes."],
-        ["Alta prioridad sin asignar",
-         "Se genera cuando una orden de prioridad Alta no tiene personal asignado."],
     ]
     at_table = Table(alert_types, colWidths=[4.5 * cm, 10 * cm])
     at_table.setStyle(TableStyle([
@@ -535,8 +548,8 @@ def build_pdf():
 
     story.append(PageBreak())
 
-    # ========== 6. COLORES Y PRIORIDADES ==========
-    story.append(Paragraph("6. Significado de Colores y Prioridades", styles["SectionTitle"]))
+    # ========== 6. COLORES Y DIAS RESTANTES ==========
+    story.append(Paragraph("6. Significado de Colores y Dias Restantes", styles["SectionTitle"]))
     add_header_line(story)
 
     story.append(Paragraph("6.1 Colores de Estado", styles["SubSection"]))
@@ -580,25 +593,21 @@ def build_pdf():
     story.append(est_table)
     story.append(Spacer(1, 0.5 * cm))
 
-    story.append(Paragraph("6.2 Niveles de Prioridad", styles["SubSection"]))
+    story.append(Paragraph("6.2 Dias Restantes", styles["SubSection"]))
     story.append(Paragraph(
-        "La prioridad indica el nivel de impacto que puede tener si el mantenimiento no se realiza:",
+        "La columna <b>Dias restantes</b> es el indicador operativo principal del sistema. "
+        "Muestra cuantos dias faltan para que venza la proxima orden de cada equipo. Su formato es:",
         styles["BodyText2"]))
 
-    prio_data = [
-        ["Prioridad", "Impacto", "Descripcion"],
-        ["Alta", "Critico",
-         "No realizar este mantenimiento puede causar fallas graves, paradas de "
-         "produccion o riesgos de seguridad."],
-        ["Media", "Moderado",
-         "El mantenimiento es necesario pero su demora no genera riesgo inmediato. "
-         "Puede afectar rendimiento o vida util del equipo."],
-        ["Baja", "Bajo",
-         "Mantenimiento de rutina. Su demora no genera impacto significativo en la "
-         "operacion diaria."],
+    dias_data = [
+        ["Texto en celda", "Significado", "Color"],
+        ["7 dias", "Faltan 7 dias para el vencimiento", "Verde (programado) o Naranja (proximo)"],
+        ["HOY", "Vence hoy mismo", "Naranja"],
+        ["VENCIDA (-3)", "Vencida hace 3 dias", "Rojo"],
+        ["—", "Orden ya finalizada (no aplica)", "Gris"],
     ]
-    prio_table = Table(prio_data, colWidths=[2.5 * cm, 2.5 * cm, 9.5 * cm])
-    prio_table.setStyle(TableStyle([
+    dias_table = Table(dias_data, colWidths=[3.5 * cm, 5.5 * cm, 5.5 * cm])
+    dias_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), DARK),
         ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
@@ -608,11 +617,17 @@ def build_pdf():
         ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("BACKGROUND", (0, 1), (1, 1), LIGHT_RED),
-        ("BACKGROUND", (0, 2), (1, 2), LIGHT_ORANGE),
-        ("BACKGROUND", (0, 3), (1, 3), LIGHT_GREEN),
+        ("FONTNAME", (0, 1), (0, -1), "Helvetica-Bold"),
+        ("BACKGROUND", (2, 3), (2, 3), LIGHT_RED),
+        ("BACKGROUND", (2, 2), (2, 2), LIGHT_ORANGE),
+        ("BACKGROUND", (2, 4), (2, 4), LIGHT_GRAY),
     ]))
-    story.append(prio_table)
+    story.append(dias_table)
+    story.append(Spacer(1, 0.3 * cm))
+    story.append(Paragraph(
+        "<b>Tip:</b> En el dashboard web (pantalla de planta), los dias restantes se muestran "
+        "con fuente grande y color por urgencia para que sean legibles a la distancia.",
+        styles["BodyText2"]))
 
     story.append(PageBreak())
 
@@ -685,8 +700,164 @@ def build_pdf():
 
     story.append(PageBreak())
 
-    # ========== 8. FAQ ==========
-    story.append(Paragraph("8. Preguntas Frecuentes", styles["SectionTitle"]))
+    # ========== 8. CERRAR ORDENES ==========
+    story.append(Paragraph("8. Cerrar Ordenes y Auto-Creacion", styles["SectionTitle"]))
+    add_header_line(story)
+
+    story.append(Paragraph(
+        "Cuando un mantenimiento se realiza, hay que registrarlo en el sistema. "
+        "El sistema tiene una funcionalidad para finalizar ordenes y, ademas, "
+        "<b>automaticamente genera la siguiente orden programada</b> en base a la "
+        "frecuencia del PAMPO correspondiente.",
+        styles["BodyText2"]))
+
+    story.append(Paragraph("8.1 Como cerrar una orden", styles["SubSection"]))
+
+    close_steps = [
+        "En el Dashboard, haga <b>doble click</b> sobre la fila de la orden a cerrar.",
+        "Se abre el popup de detalle. Presione el boton verde <b>'Finalizar Orden'</b>.",
+        "Confirme la accion en el dialogo.",
+        "El sistema marca la orden como completada en Access "
+        "(<b>¿Finalizado? = Si</b>, <b>Fecha realizacion = hoy</b>) y refresca la tabla.",
+    ]
+    for s in close_steps:
+        story.append(Paragraph(f"•  {s}", styles["BulletItem"]))
+
+    story.append(Paragraph("8.2 Auto-creacion de la siguiente OM", styles["SubSection"]))
+    story.append(Paragraph(
+        "Si la orden cerrada era la <b>ultima registrada</b> para ese ID PAMPO, el sistema crea "
+        "automaticamente la siguiente orden con:",
+        styles["BodyText2"]))
+
+    auto_items = [
+        "<b>Fecha de creacion:</b> hoy",
+        "<b>Realizar el dia:</b> hoy + frecuencia configurada (de pampo_frequencies.json)",
+        "<b>Tipo (Preventivo/Correctivo):</b> mismo que la orden cerrada",
+        "<b>ID PAMPO:</b> mismo que la orden cerrada",
+        "<b>Resto de campos:</b> vacios o por defecto",
+    ]
+    for a in auto_items:
+        story.append(Paragraph(f"•  {a}", styles["BulletItem"]))
+
+    story.append(Paragraph("8.3 Asignacion de personal a la nueva OM", styles["SubSection"]))
+    story.append(Paragraph(
+        "Si la orden cerrada tenia <b>personal asignado</b> (PM1/PM2/PM3), el sistema abre un "
+        "popup con esos nombres precargados, para que el usuario los confirme o edite para la "
+        "nueva orden:",
+        styles["BodyText2"]))
+
+    pers_items = [
+        "<b>'Guardar':</b> asigna el personal mostrado a la nueva OM.",
+        "<b>'Omitir':</b> la nueva OM queda sin personal.",
+    ]
+    for p in pers_items:
+        story.append(Paragraph(f"•  {p}", styles["BulletItem"]))
+
+    story.append(Paragraph(
+        "Si la orden cerrada <b>no tenia personal asignado</b>, la nueva OM se crea sin personal "
+        "y no aparece ningun dialogo (no se pregunta).",
+        styles["BodyText2"]))
+
+    story.append(PageBreak())
+
+    # ========== 9. DASHBOARD WEB ==========
+    story.append(Paragraph("9. Dashboard Web (Pantalla de Planta)", styles["SectionTitle"]))
+    add_header_line(story)
+
+    story.append(Paragraph(
+        "Ademas del dashboard de la app de escritorio, el sistema incluye un <b>dashboard web</b> "
+        "pensado para mostrarse permanentemente en una pantalla de planta (TV o monitor industrial). "
+        "El dashboard web se actualiza automaticamente cada 60 segundos sin intervencion del usuario.",
+        styles["BodyText2"]))
+
+    story.append(Paragraph("9.1 Como abrir el dashboard web", styles["SubSection"]))
+    open_steps = [
+        "En la app de escritorio, ir al Dashboard principal.",
+        "Hacer click en el boton azul <b>'&#127760; Abrir Dashboard Web'</b> (esquina superior derecha).",
+        "El sistema arranca un servidor web local (si no estaba activo) y abre el navegador "
+        "automaticamente con el dashboard.",
+    ]
+    for s in open_steps:
+        story.append(Paragraph(f"•  {s}", styles["BulletItem"]))
+
+    story.append(Paragraph("9.2 Vistas disponibles", styles["SubSection"]))
+    view_items = [
+        "<b>Por defecto:</b> muestra solo la <b>ultima orden de cada PAMPO</b>. Vista de "
+        "'estado actual de cada equipo'.",
+        "<b>'Ver todas las ordenes':</b> link en la esquina superior derecha del navegador. "
+        "Muestra todas las ordenes pendientes.",
+        "<b>Auto-refresh:</b> el dashboard se recarga solo cada 60 segundos. No hay que tocar nada.",
+    ]
+    for v in view_items:
+        story.append(Paragraph(f"•  {v}", styles["BulletItem"]))
+
+    story.append(Paragraph("9.3 Conectar la pantalla de planta por HDMI", styles["SubSection"]))
+    story.append(Paragraph(
+        "Caso tipico: conectar la PC de Control de Calidad a una TV/monitor de planta usando un "
+        "cable HDMI, y mostrar el dashboard web en esa pantalla.",
+        styles["BodyText2"]))
+
+    hdmi_data = [
+        ["Paso", "Accion"],
+        ["1", "Conectar el cable HDMI entre la PC y la pantalla de planta."],
+        ["2", "En Windows, presionar Win + P y seleccionar 'Extender' (no 'Duplicar')."],
+        ["3", "Abrir el dashboard web desde la app (boton 'Abrir Dashboard Web')."],
+        ["4", "Arrastrar la ventana del navegador hacia la pantalla de planta."],
+        ["5", "Presionar F11 en el navegador para entrar en modo pantalla completa."],
+        ["6", "(Opcional) Ajustar resolucion y escala desde Configuracion de Windows para que "
+              "sea legible a distancia."],
+    ]
+    hdmi_table = Table(hdmi_data, colWidths=[1.5 * cm, 13 * cm])
+    hdmi_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), DARK),
+        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 1), (0, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("GRID", (0, 0), (-1, -1), 0.5, GRAY),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (0, 0), (0, -1), "CENTER"),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(hdmi_table)
+    story.append(Spacer(1, 0.4 * cm))
+
+    # Important note
+    note_hdmi_data = [[Paragraph(
+        "<b>IMPORTANTE:</b> El dashboard se actualiza solo cada 60 segundos. No hay que refrescar "
+        "manualmente. Si la pantalla muestra un error de conexion ('localhost rechazo la conexion'), "
+        "volver a la PC y presionar el boton 'Abrir Dashboard Web' para arrancar el servidor.",
+        ParagraphStyle("note_hdmi", fontName="Helvetica", fontSize=9, leading=13, textColor=DARK))]]
+    note_hdmi_table = Table(note_hdmi_data, colWidths=[14 * cm])
+    note_hdmi_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), LIGHT_BLUE),
+        ("BOX", (0, 0), (-1, -1), 1, BLUE),
+        ("TOPPADDING", (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+    ]))
+    story.append(note_hdmi_table)
+
+    story.append(Paragraph("9.4 Tips operativos", styles["SubSection"]))
+    tips = [
+        "Dejar la PC y el navegador siempre abiertos durante el horario laboral.",
+        "Para que el servidor arranque automaticamente al prender la PC, pedir al administrador "
+        "del sistema que active <b>auto_start</b> en la configuracion del sistema.",
+        "Si la pantalla externa se queda en negro tras un rato de inactividad, deshabilitar la "
+        "suspension del monitor en Configuracion de Windows -> Sistema -> Energia.",
+        "Tambien se puede acceder al dashboard desde otra PC en la misma red ingresando "
+        "<b>http://&lt;ip-de-la-pc-server&gt;:5000</b> en el navegador.",
+    ]
+    for t in tips:
+        story.append(Paragraph(f"•  {t}", styles["BulletItem"]))
+
+    story.append(PageBreak())
+
+    # ========== 10. FAQ ==========
+    story.append(Paragraph("10. Preguntas Frecuentes", styles["SectionTitle"]))
     add_header_line(story)
 
     faqs = [
@@ -718,9 +889,27 @@ def build_pdf():
          "En el Dashboard, las filas en color rojo indican mantenimientos vencidos. La columna "
          "'Dias rest.' muestra un numero negativo indicando cuantos dias de atraso tiene."),
 
-        ("Que significa la columna 'Severidad' en las alertas?",
-         "Es un puntaje calculado que combina los dias de atraso, la prioridad del mantenimiento "
-         "y si requiere parada de produccion. A mayor severidad, mas urgente es la atencion."),
+        ("Como cierro una orden de mantenimiento?",
+         "Hacer doble click sobre la fila de la orden en el Dashboard, y en el popup que aparece "
+         "presionar el boton verde 'Finalizar Orden'. El sistema marca la orden como completada "
+         "en Access y refresca la tabla."),
+
+        ("Que pasa cuando cierro la ultima orden de un equipo?",
+         "El sistema crea automaticamente la siguiente orden programada para ese equipo, con la "
+         "frecuencia configurada en pampo_frequencies.json. Si la orden cerrada tenia personal "
+         "asignado, aparece un popup para confirmar el personal de la nueva orden."),
+
+        ("Como veo el dashboard en una pantalla grande de la planta?",
+         "Conectar la PC a la pantalla por HDMI, presionar Win+P y seleccionar 'Extender'. "
+         "Despues, en la app, hacer click en el boton azul 'Abrir Dashboard Web', arrastrar la "
+         "ventana del navegador a la pantalla externa, y presionar F11 para pantalla completa. "
+         "Ver la seccion 9 de esta guia para el procedimiento completo."),
+
+        ("La pantalla de planta dice 'localhost rechazo la conexion', que hago?",
+         "Significa que el servidor web no esta corriendo. Volver a la PC y presionar el boton "
+         "azul 'Abrir Dashboard Web' en el Dashboard de la app. El servidor arranca y se abre "
+         "automaticamente. Si pasa seguido, pedir al administrador que active 'auto_start' en "
+         "la configuracion."),
 
         ("Puedo usar el sistema en varias computadoras?",
          "Si, siempre que todas apunten a la misma base de datos Access y tengan el driver "
@@ -746,7 +935,7 @@ def build_pdf():
     story.append(Spacer(1, 1 * cm))
     story.append(HRFlowable(width="100%", thickness=1, color=GRAY, spaceBefore=0, spaceAfter=10))
     story.append(Paragraph(
-        "Sistema de Alarmas de Mantenimiento ATT - Guia de Usuario v1.1 - Abril 2026<br/>"
+        "Sistema de Alarmas de Mantenimiento ATT - Guia de Usuario v1.2 - Mayo 2026<br/>"
         "Equipo de Control de Calidad",
         styles["Footer"]))
 
