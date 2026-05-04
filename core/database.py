@@ -230,12 +230,17 @@ def close_order(db_path: str, n_om: int, fecha_realizacion: datetime = None) -> 
         conn = pyodbc.connect(conn_str)
         cursor = conn.cursor()
         date_literal = f"#{fecha_realizacion.year}/{fecha_realizacion.month:02d}/{fecha_realizacion.day:02d}#"
+        # The column [¿Finalizado?] contains a '?' that the Access ODBC driver
+        # counts as a parameter marker (same issue as SELECT queries — see
+        # get_all_orders() comments). We embed all real values as literals and
+        # pass one dummy value (True) so the parameter count matches the single
+        # '?' the driver finds in the column name.
         query = (
             "UPDATE [Base Orden Mantenimiento] "
             f"SET [¿Finalizado?] = True, [Fecha realización] = {date_literal} "
             f"WHERE [N°OM] = {n_om}"
         )
-        cursor.execute(query)
+        cursor.execute(query, True)  # dummy True satisfies '?' count in column name
         conn.commit()
         conn.close()
         logger.info("Order #%d marked as completed on %s", n_om, fecha_realizacion.strftime("%d/%m/%Y"))
