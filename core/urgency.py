@@ -25,11 +25,19 @@ def load_pampo_frequencies(path: str = "data/pampo_frequencies.json") -> dict[in
         return {}
 
 
+def get_upcoming_threshold(freq: int) -> int:
+    """Return how many days before expiration an order should be flagged as Próximo."""
+    if freq < 60:
+        return 7
+    elif freq <= 90:
+        return 14
+    return 30
+
+
 def calculate_urgency(
     orden: OrdenMantenimiento,
     frequencies: dict[int, int],
     default_frequency: int = 30,
-    upcoming_days: int = 7,
 ) -> OrdenMantenimiento:
     """Calculate urgency fields for an order and return the updated order."""
     if orden.finalizado:
@@ -40,10 +48,8 @@ def calculate_urgency(
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     freq = frequencies.get(orden.id_pampo, default_frequency)
 
-    # Determine deadline
-    if orden.realizar_el_dia:
-        fecha_limite = orden.realizar_el_dia
-    elif orden.fecha:
+    # Deadline is always Fecha + frecuencia; realizar_el_dia is only indicative
+    if orden.fecha:
         fecha_limite = orden.fecha + timedelta(days=freq)
     else:
         fecha_limite = today
@@ -52,6 +58,8 @@ def calculate_urgency(
     # Days remaining (negative = overdue)
     dias_restantes = (fecha_limite - today).days
     orden.dias_restantes = dias_restantes
+
+    upcoming_days = get_upcoming_threshold(freq)
 
     # Status
     if dias_restantes < 0:
@@ -71,11 +79,10 @@ def process_orders(
     orders: list[OrdenMantenimiento],
     frequencies: dict[int, int],
     default_frequency: int = 30,
-    upcoming_days: int = 7,
 ) -> list[OrdenMantenimiento]:
     """Calculate urgency for all orders and return sorted by severity (most urgent first)."""
     for orden in orders:
-        calculate_urgency(orden, frequencies, default_frequency, upcoming_days)
+        calculate_urgency(orden, frequencies, default_frequency)
     return sorted(orders, key=lambda o: o.severidad, reverse=True)
 
 

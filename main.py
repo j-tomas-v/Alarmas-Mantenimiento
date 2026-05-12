@@ -16,7 +16,7 @@ from core.alerts import create_default_registry, is_alert_in_cooldown, log_alert
 from core.database import check_driver_installed, close_order as db_close_order, create_order as db_create_order, get_all_orders, get_all_pampo, get_unique_personnel, load_config, update_personal
 from core.email_service import send_alert_email
 from core.models import Alert
-from core.urgency import load_pampo_frequencies, process_orders
+from core.urgency import get_upcoming_threshold, load_pampo_frequencies, process_orders
 from gui.alerts_view import AlertsView
 from gui.app import App
 from gui.dashboard import DashboardView
@@ -100,9 +100,8 @@ class AppController:
             self.orders = get_all_orders(db_path, year_from)
             frequencies = load_pampo_frequencies()
             default_freq = self.config.getint("alertas", "frecuencia_default_dias", fallback=30)
-            upcoming_days = self.config.getint("alertas", "dias_aviso_proximo", fallback=7)
 
-            self.orders = process_orders(self.orders, frequencies, default_freq, upcoming_days)
+            self.orders = process_orders(self.orders, frequencies, default_freq)
 
             # Update dashboard
             dashboard: DashboardView = self.app.get_view("dashboard")
@@ -178,13 +177,15 @@ class AppController:
         freq_days = frequencies.get(closed_order.id_pampo, default_freq)
 
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        new_deadline = today + timedelta(days=freq_days)
+        fecha_vencimiento = today + timedelta(days=freq_days)
+        threshold = get_upcoming_threshold(freq_days)
+        realizar_el_dia = fecha_vencimiento - timedelta(days=threshold)
 
         new_n_om = db_create_order(
             db_path,
             id_pampo=closed_order.id_pampo,
             fecha=today,
-            fecha_limite=new_deadline,
+            realizar_el_dia=realizar_el_dia,
             preventivo=closed_order.preventivo,
             correctivo=closed_order.correctivo,
         )

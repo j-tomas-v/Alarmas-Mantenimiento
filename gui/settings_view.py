@@ -166,7 +166,6 @@ class SettingsView(tk.Frame):
         alert_fields = [
             ("intervalo_check_horas", "Intervalo verificacion (hs):", "4"),
             ("cooldown_dias", "Cooldown reenvio (dias):", "7"),
-            ("dias_aviso_proximo", "Dias aviso proximo:", "7"),
             ("frecuencia_default_dias", "Frecuencia default (dias):", "30"),
         ]
         for key, label, default in alert_fields:

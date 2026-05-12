@@ -30,8 +30,7 @@ def _load_orders(config):
     orders = get_all_orders(db_path, year_from)
     frequencies = load_pampo_frequencies()
     default_freq = config.getint("alertas", "frecuencia_default_dias", fallback=30)
-    upcoming_days = config.getint("alertas", "dias_aviso_proximo", fallback=7)
-    orders = process_orders(orders, frequencies, default_freq, upcoming_days)
+    orders = process_orders(orders, frequencies, default_freq)
     summary = get_summary(orders)
     return orders, summary
 

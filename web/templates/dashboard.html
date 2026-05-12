@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="refresh" content="{{ refresh_seconds }}">
     <title>ATT Mantenimiento - Dashboard Planta</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -13,53 +12,65 @@
             color: #eee;
             min-height: 100vh;
         }
+        .sticky-top {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: #1a1a2e;
+        }
         header {
             background: #16213e;
-            padding: 18px 30px;
+            padding: 20px 36px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 3px solid #0f3460;
         }
         header h1 {
-            font-size: 28px;
+            font-size: 40px;
             font-weight: 700;
             color: #e94560;
         }
+        .header-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+        }
         header .timestamp {
-            font-size: 16px;
-            color: #999;
+            font-size: 20px;
+            color: #bbb;
         }
         .toggle-link {
             color: #53a8b6;
             text-decoration: none;
-            font-size: 14px;
-            margin-left: 20px;
+            font-size: 16px;
         }
         .toggle-link:hover { text-decoration: underline; }
 
         .cards {
             display: flex;
             gap: 20px;
-            padding: 20px 30px;
+            padding: 20px 36px;
+            background: #1a1a2e;
         }
         .card {
             flex: 1;
             background: #16213e;
-            border-radius: 10px;
-            padding: 20px 24px;
+            border-radius: 12px;
+            padding: 22px 28px;
             text-align: center;
-            border-left: 5px solid #555;
+            border-left: 6px solid #555;
         }
         .card .number {
-            font-size: 48px;
+            font-size: 72px;
             font-weight: 800;
-            line-height: 1.1;
+            line-height: 1.0;
         }
         .card .label {
-            font-size: 16px;
+            font-size: 20px;
             color: #aaa;
-            margin-top: 4px;
+            margin-top: 6px;
         }
         .card-pendientes { border-left-color: #E74C3C; }
         .card-pendientes .number { color: #E74C3C; }
@@ -71,27 +82,26 @@
         .card-completados .number { color: #27AE60; }
 
         .table-container {
-            padding: 0 30px 30px;
-            overflow-x: auto;
+            padding: 0 36px 36px;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 15px;
+            font-size: 22px;
         }
         thead th {
             background: #0f3460;
             color: #ddd;
-            padding: 12px 10px;
+            padding: 16px 14px;
             text-align: left;
             font-weight: 600;
+            font-size: 18px;
             white-space: nowrap;
         }
         tbody td {
-            padding: 10px;
+            padding: 18px 14px;
             border-bottom: 1px solid #2a2a4a;
         }
-        tbody tr:hover { background: rgba(255,255,255,0.03); }
 
         .row-vencido { background: rgba(231, 76, 60, 0.15); }
         .row-vencido td:nth-child(8) { color: #E74C3C; font-weight: 700; }
@@ -102,71 +112,73 @@
         .row-completado { background: rgba(149, 165, 166, 0.08); }
         .row-completado td:nth-child(8) { color: #95A5A6; }
 
-        /* Days remaining: bigger, bolder, color-coded */
         .dias-col, .dias-cell { text-align: center; }
-        .dias-cell { font-size: 18px; font-weight: 700; }
+        .dias-cell { font-size: 36px; font-weight: 700; }
         .row-vencido .dias-cell { color: #E74C3C; }
         .row-proximo .dias-cell { color: #F39C12; }
         .row-programado .dias-cell { color: #27AE60; }
-        .row-completado .dias-cell { color: #777; font-weight: 400; }
+        .row-completado .dias-cell { color: #777; font-size: 24px; font-weight: 400; }
 
         .badge-parada {
             background: #E74C3C;
             color: white;
-            padding: 2px 8px;
+            padding: 3px 10px;
             border-radius: 4px;
-            font-size: 12px;
+            font-size: 14px;
             font-weight: 600;
         }
         footer {
             text-align: center;
-            padding: 15px;
+            padding: 18px;
             color: #555;
-            font-size: 13px;
+            font-size: 16px;
         }
         .empty-state {
             text-align: center;
-            padding: 60px;
+            padding: 80px;
             color: #666;
-            font-size: 20px;
+            font-size: 28px;
         }
     </style>
 </head>
 <body>
-    <header>
-        <div>
-            <h1>ATT Mantenimiento</h1>
-        </div>
-        <div>
-            {% if show_all %}
-                <a href="/" class="toggle-link">Ver ultimo por PAMPO</a>
-            {% else %}
-                <a href="/?all=1" class="toggle-link">Ver todas las ordenes</a>
-            {% endif %}
-            <span class="timestamp">Actualizado: {{ timestamp }}</span>
-        </div>
-    </header>
+    <div class="sticky-top">
+        <header>
+            <div>
+                <h1>ATT Mantenimiento</h1>
+            </div>
+            <div class="header-right">
+                <span class="timestamp" id="timestamp">Actualizado: {{ timestamp }}</span>
+                {% if show_all %}
+                    <a href="/" class="toggle-link">Ver ultimo por PAMPO</a>
+                {% else %}
+                    <a href="/?all=1" class="toggle-link">Ver todas las ordenes</a>
+                {% endif %}
+            </div>
+        </header>
 
-    <div class="cards">
-        <div class="card card-pendientes">
-            <div class="number">{{ summary.total_pendientes }}</div>
-            <div class="label">Pendientes</div>
-        </div>
-        <div class="card card-vencidos">
-            <div class="number">{{ summary.vencidos }}</div>
-            <div class="label">Vencidos</div>
-        </div>
-        <div class="card card-proximos">
-            <div class="number">{{ summary.proximos }}</div>
-            <div class="label">Proximos</div>
-        </div>
-        <div class="card card-completados">
-            <div class="number">{{ summary.completados_mes }}</div>
-            <div class="label">Completados (mes)</div>
+        <div class="cards" id="cards">
+            <div class="card card-pendientes">
+                <div class="number" id="card-pendientes">{{ summary.total_pendientes }}</div>
+                <div class="label">Pendientes</div>
+            </div>
+            <div class="card card-vencidos">
+                <div class="number" id="card-vencidos">{{ summary.vencidos }}</div>
+                <div class="label">Vencidos</div>
+            </div>
+            <div class="card card-proximos">
+                <div class="number" id="card-proximos">{{ summary.proximos }}</div>
+                <div class="label">Proximos</div>
+            </div>
+            <div class="card card-completados">
+                <div class="number" id="card-completados">{{ summary.completados_mes }}</div>
+                <div class="label">Completados (mes)</div>
+            </div>
         </div>
     </div>
 
     <div class="table-container">
+        <div id="table-wrapper">
         {% if orders %}
         <table>
             <thead>
@@ -182,7 +194,7 @@
                     <th>Personal</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="orders-tbody">
                 {% for o in orders %}
                 <tr class="row-{{ o.estado.value | lower }}">
                     <td>{{ o.n_om }}</td>
@@ -209,12 +221,106 @@
             </tbody>
         </table>
         {% else %}
-        <div class="empty-state">No hay ordenes para mostrar.</div>
+        <div class="empty-state" id="empty-state">No hay ordenes para mostrar.</div>
         {% endif %}
+        </div>
     </div>
 
     <footer>
-        Sistema de Mantenimiento ATT &mdash; Auto-actualiza cada {{ refresh_seconds }}s
+        Sistema de Mantenimiento ATT
     </footer>
+
+    <script>
+        const REFRESH_MS = {{ refresh_seconds }} * 1000;
+        const SCROLL_STEP = 1;
+        const SCROLL_TICK = 40;
+        const PAUSA_INICIO = 3000;
+        const PAUSA_FONDO = 2500;
+
+        let pausado = false;
+
+        function scrollLoop() {
+            setInterval(function() {
+                if (pausado) return;
+                var atBottom = (window.innerHeight + window.scrollY) >= document.body.scrollHeight - 5;
+                if (atBottom) {
+                    pausado = true;
+                    setTimeout(function() {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        setTimeout(function() { pausado = false; }, 1200);
+                    }, PAUSA_FONDO);
+                } else {
+                    window.scrollBy(0, SCROLL_STEP);
+                }
+            }, SCROLL_TICK);
+        }
+        setTimeout(scrollLoop, PAUSA_INICIO);
+
+        function estadoClass(estado) {
+            return 'row-' + estado.toLowerCase();
+        }
+
+        function diasCellHtml(o) {
+            if (o.finalizado) return '—';
+            if (o.dias_restantes === null || o.dias_restantes === undefined) return '';
+            if (o.dias_restantes < 0) return 'VENCIDA (' + o.dias_restantes + ')';
+            if (o.dias_restantes === 0) return 'HOY';
+            return o.dias_restantes + ' dias';
+        }
+
+        function renderTabla(orders) {
+            if (!orders || orders.length === 0) {
+                document.getElementById('table-wrapper').innerHTML =
+                    '<div class="empty-state">No hay ordenes para mostrar.</div>';
+                return;
+            }
+            var html = '<table><thead><tr>' +
+                '<th>N° OM</th>' +
+                '<th class="dias-col">Dias rest.</th>' +
+                '<th>Maquina</th>' +
+                '<th>Actividad</th>' +
+                '<th>Tipo</th>' +
+                '<th>Fecha creacion</th>' +
+                '<th>Fecha limite</th>' +
+                '<th>Estado</th>' +
+                '<th>Personal</th>' +
+                '</tr></thead><tbody>';
+            orders.forEach(function(o) {
+                var cls = estadoClass(o.estado);
+                var parada = o.con_parada ? ' <span class="badge-parada">PARADA</span>' : '';
+                html += '<tr class="' + cls + '">' +
+                    '<td>' + o.n_om + '</td>' +
+                    '<td class="dias-cell">' + diasCellHtml(o) + '</td>' +
+                    '<td>' + o.maquina + parada + '</td>' +
+                    '<td>' + o.actividad + '</td>' +
+                    '<td>' + o.tipo + '</td>' +
+                    '<td>' + o.fecha + '</td>' +
+                    '<td>' + o.fecha_limite + '</td>' +
+                    '<td>' + o.estado + '</td>' +
+                    '<td>' + o.personal + '</td>' +
+                    '</tr>';
+            });
+            html += '</tbody></table>';
+            document.getElementById('table-wrapper').innerHTML = html;
+        }
+
+        function refreshData() {
+            fetch('/api/orders' + window.location.search)
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    document.getElementById('card-pendientes').textContent = data.summary.total_pendientes;
+                    document.getElementById('card-vencidos').textContent = data.summary.vencidos;
+                    document.getElementById('card-proximos').textContent = data.summary.proximos;
+                    document.getElementById('card-completados').textContent = data.summary.completados_mes;
+                    renderTabla(data.orders);
+                    var now = new Date();
+                    document.getElementById('timestamp').textContent =
+                        'Actualizado: ' + now.toLocaleDateString('es-AR') + ' ' + now.toLocaleTimeString('es-AR');
+                })
+                .catch(function() {});
+        }
+
+        setInterval(refreshData, REFRESH_MS);
+    </script>
 </body>
 </html>
