@@ -8,23 +8,23 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #1a1a2e;
-            color: #eee;
+            background: #f0f2f5;
+            color: #1a1a2e;
             min-height: 100vh;
         }
         .sticky-top {
             position: sticky;
             top: 0;
             z-index: 100;
-            background: #1a1a2e;
+            background: #f0f2f5;
         }
         header {
-            background: #16213e;
+            background: #1a3a5c;
             padding: 20px 36px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 3px solid #0f3460;
+            border-bottom: 3px solid #0d2b47;
         }
         header h1 {
             font-size: 40px;
@@ -39,10 +39,10 @@
         }
         header .timestamp {
             font-size: 20px;
-            color: #bbb;
+            color: #c8ddf0;
         }
         .toggle-link {
-            color: #53a8b6;
+            color: #7dd4e8;
             text-decoration: none;
             font-size: 16px;
         }
@@ -52,15 +52,16 @@
             display: flex;
             gap: 20px;
             padding: 20px 36px;
-            background: #1a1a2e;
+            background: #f0f2f5;
         }
         .card {
             flex: 1;
-            background: #16213e;
+            background: #ffffff;
             border-radius: 12px;
             padding: 22px 28px;
             text-align: center;
-            border-left: 6px solid #555;
+            border-left: 6px solid #bbb;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
         }
         .card .number {
             font-size: 72px;
@@ -69,17 +70,17 @@
         }
         .card .label {
             font-size: 20px;
-            color: #aaa;
+            color: #555;
             margin-top: 6px;
         }
         .card-pendientes { border-left-color: #E74C3C; }
         .card-pendientes .number { color: #E74C3C; }
         .card-vencidos { border-left-color: #E74C3C; }
         .card-vencidos .number { color: #E74C3C; }
-        .card-proximos { border-left-color: #F39C12; }
-        .card-proximos .number { color: #F39C12; }
-        .card-completados { border-left-color: #27AE60; }
-        .card-completados .number { color: #27AE60; }
+        .card-proximos { border-left-color: #E67E22; }
+        .card-proximos .number { color: #E67E22; }
+        .card-completados { border-left-color: #1E8449; }
+        .card-completados .number { color: #1E8449; }
 
         .table-container {
             padding: 0 36px 36px;
@@ -90,8 +91,8 @@
             font-size: 22px;
         }
         thead th {
-            background: #0f3460;
-            color: #ddd;
+            background: #1a3a5c;
+            color: #ffffff;
             padding: 16px 14px;
             text-align: left;
             font-weight: 600;
@@ -100,24 +101,24 @@
         }
         tbody td {
             padding: 18px 14px;
-            border-bottom: 1px solid #2a2a4a;
+            border-bottom: 1px solid #d0d5dd;
         }
 
-        .row-vencido { background: rgba(231, 76, 60, 0.15); }
+        .row-vencido { background: rgba(231, 76, 60, 0.12); }
         .row-vencido td:nth-child(8) { color: #E74C3C; font-weight: 700; }
-        .row-proximo { background: rgba(243, 156, 18, 0.12); }
-        .row-proximo td:nth-child(8) { color: #F39C12; font-weight: 700; }
-        .row-programado { background: rgba(39, 174, 96, 0.08); }
-        .row-programado td:nth-child(8) { color: #27AE60; font-weight: 700; }
-        .row-completado { background: rgba(149, 165, 166, 0.08); }
-        .row-completado td:nth-child(8) { color: #95A5A6; }
+        .row-proximo { background: rgba(230, 126, 34, 0.10); }
+        .row-proximo td:nth-child(8) { color: #E67E22; font-weight: 700; }
+        .row-programado { background: rgba(30, 132, 73, 0.08); }
+        .row-programado td:nth-child(8) { color: #1E8449; font-weight: 700; }
+        .row-completado { background: rgba(127, 140, 141, 0.10); }
+        .row-completado td:nth-child(8) { color: #7F8C8D; }
 
         .dias-col, .dias-cell { text-align: center; }
         .dias-cell { font-size: 36px; font-weight: 700; }
         .row-vencido .dias-cell { color: #E74C3C; }
-        .row-proximo .dias-cell { color: #F39C12; }
-        .row-programado .dias-cell { color: #27AE60; }
-        .row-completado .dias-cell { color: #777; font-size: 24px; font-weight: 400; }
+        .row-proximo .dias-cell { color: #E67E22; }
+        .row-programado .dias-cell { color: #1E8449; }
+        .row-completado .dias-cell { color: #7F8C8D; font-size: 24px; font-weight: 400; }
 
         .badge-parada {
             background: #E74C3C;
@@ -130,7 +131,7 @@
         footer {
             text-align: center;
             padding: 18px;
-            color: #555;
+            color: #888;
             font-size: 16px;
         }
         .empty-state {
