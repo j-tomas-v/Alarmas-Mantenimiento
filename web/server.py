@@ -44,7 +44,7 @@ def _load_orders_cached(config):
     now = time.time()
     if _order_cache["orders"] is not None and now - _order_cache["ts"] < _CACHE_TTL:
         return _order_cache["orders"], _order_cache["summary"]
-    orders, summary = _load_orders_cached(config)
+    orders, summary = _load_orders(config)
     _order_cache.update({"orders": orders, "summary": summary, "ts": now})
     return orders, summary
 
