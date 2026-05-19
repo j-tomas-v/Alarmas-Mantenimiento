@@ -249,22 +249,92 @@ class DashboardView(tk.Frame):
             )
             finalizar_btn.pack(side="left", padx=5)
 
-    def _confirm_close_order(self, orden: OrdenMantenimiento, popup):
-        if not messagebox.askyesno(
-            "Confirmar",
-            f"¿Marcar OM #{orden.n_om} como finalizada?\n"
-            f"Maquina: {orden.maquina}\n"
-            f"Actividad: {orden.actividad}\n\n"
-            "Se registrará con la fecha de hoy.",
-            parent=popup,
-        ):
-            return
-        success = self._controller.close_order(orden.n_om)
-        if success:
-            messagebox.showinfo("Orden finalizada", f"OM #{orden.n_om} marcada como completada.", parent=popup)
-            popup.destroy()
-        else:
-            messagebox.showerror("Error", "No se pudo cerrar la orden. Revise el log.", parent=popup)
+    def _confirm_close_order(self, orden: OrdenMantenimiento, detail_popup):
+        personal_list = []
+        if self._controller and hasattr(self._controller, "get_personnel_list"):
+            personal_list = self._controller.get_personnel_list()
+
+        popup = tk.Toplevel(self)
+        popup.title(f"Finalizar OM #{orden.n_om}")
+        popup.geometry("460x360")
+        popup.resizable(False, False)
+        popup.grab_set()
+
+        frame = tk.Frame(popup, padx=20, pady=15)
+        frame.pack(fill="both", expand=True)
+
+        tk.Label(
+            frame, text=f"OM #{orden.n_om}  —  {orden.maquina}",
+            font=("Segoe UI", 10, "bold"), wraplength=420, justify="left",
+        ).pack(anchor="w")
+        tk.Label(
+            frame, text=orden.actividad,
+            font=("Segoe UI", 9), fg="#555", wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(0, 12))
+
+        # Solicita
+        sol_row = tk.Frame(frame)
+        sol_row.pack(fill="x", pady=3)
+        tk.Label(sol_row, text="Solicita:", width=14, anchor="w").pack(side="left")
+        sol_var = tk.StringVar(value=orden.solicita)
+        tk.Entry(sol_row, textvariable=sol_var, width=32).pack(side="left", padx=(5, 0))
+
+        # Personal PM1/PM2/PM3
+        pm_vars = []
+        current = list(orden.personal) + ["", "", ""]
+        for i, label in enumerate(("PM1", "PM2", "PM3")):
+            row = tk.Frame(frame)
+            row.pack(fill="x", pady=3)
+            tk.Label(row, text=f"{label}:", width=14, anchor="w").pack(side="left")
+            var = tk.StringVar(value=current[i])
+            combo = ttk.Combobox(row, textvariable=var, values=[""] + personal_list, width=30)
+            combo.pack(side="left", padx=(5, 0))
+            pm_vars.append(var)
+
+        # Fecha Realizacion
+        fecha_row = tk.Frame(frame)
+        fecha_row.pack(fill="x", pady=3)
+        tk.Label(fecha_row, text="Fecha realización:", width=14, anchor="w").pack(side="left")
+        fecha_var = tk.StringVar(value="")
+        fecha_entry = tk.Entry(fecha_row, textvariable=fecha_var, width=14)
+        fecha_entry.pack(side="left", padx=(5, 0))
+        tk.Label(fecha_row, text="(dd/mm/aaaa — vacío = hoy)",
+                 font=("Segoe UI", 8), fg="#888").pack(side="left", padx=(6, 0))
+
+        error_var = tk.StringVar()
+        tk.Label(frame, textvariable=error_var, fg="red", font=("Segoe UI", 8)).pack(anchor="w", pady=(4, 0))
+
+        def _confirm():
+            fecha_str = fecha_var.get().strip()
+            fecha_realizacion = None
+            if fecha_str:
+                try:
+                    fecha_realizacion = datetime.strptime(fecha_str, "%d/%m/%Y")
+                except ValueError:
+                    error_var.set("Formato de fecha inválido. Use dd/mm/aaaa.")
+                    return
+
+            solicita = sol_var.get().strip()
+            pm1, pm2, pm3 = (v.get().strip() for v in pm_vars)
+
+            success = self._controller.close_order(
+                orden.n_om, fecha_realizacion, solicita, pm1, pm2, pm3)
+            if success:
+                popup.destroy()
+                detail_popup.destroy()
+            else:
+                error_var.set("No se pudo cerrar la orden. Revise el log.")
+
+        btn_row = tk.Frame(frame)
+        btn_row.pack(pady=(14, 0))
+        tk.Button(
+            btn_row, text="Confirmar y Finalizar",
+            bg="#27AE60", fg="white", font=("Segoe UI", 10, "bold"),
+            activebackground="#219A52", activeforeground="white",
+            relief="flat", padx=10, pady=4,
+            command=_confirm,
+        ).pack(side="left", padx=5)
+        ttk.Button(btn_row, text="Cancelar", command=popup.destroy).pack(side="left", padx=5)
 
     def _open_web_dashboard(self):
         """Start the web server (if needed) and open it in the browser."""
@@ -278,45 +348,50 @@ class DashboardView(tk.Frame):
                 "Verifique que Flask este instalado: pip install flask",
             )
 
-    def prompt_personal_for_new_order(
+    def prompt_for_new_order(
         self, new_n_om: int, maquina: str, actividad: str,
-        previous_personal: list[str],
+        previous_solicita: str, previous_personal: list[str],
     ):
-        """Show a dialog asking the user to confirm/edit personnel for the
-        auto-created order. Pre-fills with the personnel from the closed order.
-        Only invoked by AppController when previous_personal is non-empty."""
+        """Show a dialog asking the user to confirm/edit Solicita and Personal
+        for the auto-created order. Pre-fills with values from the closed order."""
         personal_list = []
         if self._controller and hasattr(self._controller, "get_personnel_list"):
             personal_list = self._controller.get_personnel_list()
 
         popup = tk.Toplevel(self)
-        popup.title(f"Personal para nueva OM #{new_n_om}")
-        popup.geometry("440x280")
+        popup.title(f"Nueva OM #{new_n_om}")
+        popup.geometry("460x330")
         popup.resizable(False, False)
         popup.grab_set()
 
         frame = tk.Frame(popup, padx=20, pady=15)
         frame.pack(fill="both", expand=True)
 
-        tk.Label(
-            frame, text=f"Nueva OM generada para:", font=("Segoe UI", 9),
-        ).pack(anchor="w")
+        tk.Label(frame, text="Nueva OM generada para:", font=("Segoe UI", 9)).pack(anchor="w")
         tk.Label(
             frame, text=f"{maquina} — {actividad}",
-            font=("Segoe UI", 10, "bold"), wraplength=400, justify="left",
-        ).pack(anchor="w", pady=(0, 10))
+            font=("Segoe UI", 10, "bold"), wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(0, 6))
         tk.Label(
             frame,
-            text="Personal de la OM anterior precargado. Confirme o modifique:",
+            text="Valores heredados de la OM anterior. Confirme o modifique:",
             font=("Segoe UI", 9), fg="#555",
-        ).pack(anchor="w", pady=(0, 8))
+        ).pack(anchor="w", pady=(0, 10))
 
+        # Solicita
+        sol_row = tk.Frame(frame)
+        sol_row.pack(fill="x", pady=3)
+        tk.Label(sol_row, text="Solicita:", width=7, anchor="w").pack(side="left")
+        sol_var = tk.StringVar(value=previous_solicita or "")
+        tk.Entry(sol_row, textvariable=sol_var, width=34).pack(side="left", padx=(5, 0))
+
+        # Personal PM1/PM2/PM3
         pm_vars = []
         current = list(previous_personal) + ["", "", ""]
         for i, label in enumerate(("PM1", "PM2", "PM3")):
             row = tk.Frame(frame)
             row.pack(fill="x", pady=3)
-            tk.Label(row, text=f"{label}:", width=5, anchor="w").pack(side="left")
+            tk.Label(row, text=f"{label}:", width=7, anchor="w").pack(side="left")
             var = tk.StringVar(value=current[i])
             combo = ttk.Combobox(
                 row, textvariable=var, values=[""] + personal_list, width=32)
@@ -324,14 +399,18 @@ class DashboardView(tk.Frame):
             pm_vars.append(var)
 
         def _save():
+            solicita = sol_var.get().strip()
             pm1, pm2, pm3 = (v.get().strip() for v in pm_vars)
+            ok_personal = True
+            ok_solicita = True
             if self._controller and hasattr(self._controller, "assign_personal"):
-                ok = self._controller.assign_personal(new_n_om, pm1, pm2, pm3)
-                if ok:
-                    popup.destroy()
-                else:
-                    messagebox.showerror(
-                        "Error", "No se pudo guardar el personal.", parent=popup)
+                ok_personal = self._controller.assign_personal(new_n_om, pm1, pm2, pm3)
+            if self._controller and hasattr(self._controller, "update_solicita"):
+                ok_solicita = self._controller.update_solicita(new_n_om, solicita)
+            if ok_personal and ok_solicita:
+                popup.destroy()
+            else:
+                messagebox.showerror("Error", "No se pudo guardar en la base de datos.", parent=popup)
 
         btn_row = tk.Frame(frame)
         btn_row.pack(pady=(15, 0))

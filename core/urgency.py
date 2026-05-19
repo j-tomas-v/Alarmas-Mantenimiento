@@ -47,9 +47,14 @@ def calculate_urgency(
 
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     freq = frequencies.get(orden.id_pampo, default_frequency)
+    upcoming_days = get_upcoming_threshold(freq)
 
-    # Deadline is always Fecha + frecuencia; realizar_el_dia is only indicative
-    if orden.fecha:
+    # Use realizar_el_dia as the deadline anchor when available:
+    # fecha_limite = realizar_el_dia + threshold, which lets the auto-create
+    # flow base the next OM on the actual fecha_realizacion of the closed order.
+    if orden.realizar_el_dia:
+        fecha_limite = orden.realizar_el_dia + timedelta(days=upcoming_days)
+    elif orden.fecha:
         fecha_limite = orden.fecha + timedelta(days=freq)
     else:
         fecha_limite = today
@@ -58,8 +63,6 @@ def calculate_urgency(
     # Days remaining (negative = overdue)
     dias_restantes = (fecha_limite - today).days
     orden.dias_restantes = dias_restantes
-
-    upcoming_days = get_upcoming_threshold(freq)
 
     # Status
     if dias_restantes < 0:

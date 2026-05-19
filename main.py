@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 import schedule
 
 from core.alerts import create_default_registry, is_alert_in_cooldown, log_alert_sent
-from core.database import check_driver_installed, close_order as db_close_order, create_order as db_create_order, get_all_orders, get_all_pampo, get_unique_personnel, load_config, update_personal
+from core.database import check_driver_installed, close_order as db_close_order, create_order as db_create_order, get_all_orders, get_all_pampo, get_unique_personnel, load_config, update_personal, update_solicita as db_update_solicita
 from core.email_service import send_alert_email
 from core.models import Alert
 from core.urgency import get_upcoming_threshold, load_pampo_frequencies, process_orders
@@ -140,7 +140,15 @@ class AppController:
             return []
         return get_unique_personnel(db_path)
 
-    def close_order(self, n_om: int, fecha_realizacion: datetime = None) -> bool:
+    def close_order(
+        self,
+        n_om: int,
+        fecha_realizacion: datetime = None,
+        solicita: str = None,
+        pm1: str = None,
+        pm2: str = None,
+        pm3: str = None,
+    ) -> bool:
         """Mark an order as completed and, if it was the latest for its PAMPO,
         auto-create the next scheduled order using the configured frequency.
         Returns True if the close succeeded."""
@@ -150,7 +158,11 @@ class AppController:
         # state (id_pampo, personal, preventivo/correctivo).
         closed = next((o for o in self.orders if o.n_om == n_om), None)
 
-        success = db_close_order(db_path, n_om, fecha_realizacion)
+        # If no fecha_realizacion provided, default to today so auto-create has a concrete base date.
+        if fecha_realizacion is None:
+            fecha_realizacion = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+        success = db_close_order(db_path, n_om, fecha_realizacion, solicita, pm1, pm2, pm3)
         if not success:
             return False
 
@@ -162,22 +174,24 @@ class AppController:
                 default=None,
             )
             if latest_for_pampo and latest_for_pampo.n_om == n_om:
-                self._auto_create_next_order(closed)
+                self._auto_create_next_order(closed, fecha_realizacion)
 
         self.refresh_data()
         self.evaluate_alerts()
         return True
 
-    def _auto_create_next_order(self, closed_order):
+    def _auto_create_next_order(self, closed_order, fecha_realizacion: datetime):
         """Create a new OM for the same PAMPO with frequency-based deadline.
-        If the closed order had personnel, prompt the user to confirm/edit it."""
+        The deadline is based on fecha_realizacion of the closed order.
+        Always prompts the user to confirm/edit Solicita and Personal for the new OM."""
         db_path = self.config.get("database", "path", fallback="")
         frequencies = load_pampo_frequencies()
         default_freq = self.config.getint("alertas", "frecuencia_default_dias", fallback=30)
         freq_days = frequencies.get(closed_order.id_pampo, default_freq)
 
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        fecha_vencimiento = today + timedelta(days=freq_days)
+        base_date = fecha_realizacion.replace(hour=0, minute=0, second=0, microsecond=0)
+        fecha_vencimiento = base_date + timedelta(days=freq_days)
         threshold = get_upcoming_threshold(freq_days)
         realizar_el_dia = fecha_vencimiento - timedelta(days=threshold)
 
@@ -193,19 +207,26 @@ class AppController:
             logger.error("No se pudo crear la nueva OM para PAMPO %d", closed_order.id_pampo)
             return
 
-        # Only prompt for personnel if the closed order had any assigned
-        if closed_order.personal:
-            dashboard: DashboardView = self.app.get_view("dashboard")
-            if dashboard and hasattr(dashboard, "prompt_personal_for_new_order"):
-                dashboard.prompt_personal_for_new_order(
-                    new_n_om, closed_order.maquina, closed_order.actividad,
-                    closed_order.personal,
-                )
+        dashboard: DashboardView = self.app.get_view("dashboard")
+        if dashboard and hasattr(dashboard, "prompt_for_new_order"):
+            dashboard.prompt_for_new_order(
+                new_n_om, closed_order.maquina, closed_order.actividad,
+                closed_order.solicita, closed_order.personal,
+            )
 
     def assign_personal(self, n_om: int, pm1: str, pm2: str, pm3: str) -> bool:
         """Write PM1/PM2/PM3 to Access and refresh the UI."""
         db_path = self.config.get("database", "path", fallback="")
         success = update_personal(db_path, n_om, pm1, pm2, pm3)
+        if success:
+            self.refresh_data()
+            self.evaluate_alerts()
+        return success
+
+    def update_solicita(self, n_om: int, solicita: str) -> bool:
+        """Write Solicita to Access and refresh the UI."""
+        db_path = self.config.get("database", "path", fallback="")
+        success = db_update_solicita(db_path, n_om, solicita)
         if success:
             self.refresh_data()
             self.evaluate_alerts()

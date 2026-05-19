@@ -265,7 +265,15 @@ def create_order(
         return None
 
 
-def close_order(db_path: str, n_om: int, fecha_realizacion: datetime = None) -> bool:
+def close_order(
+    db_path: str,
+    n_om: int,
+    fecha_realizacion: datetime = None,
+    solicita: str = None,
+    pm1: str = None,
+    pm2: str = None,
+    pm3: str = None,
+) -> bool:
     """Mark an order as completed in the Access database.
 
     Uses win32com/ADODB instead of pyodbc to avoid an unresolvable catch-22:
@@ -277,9 +285,23 @@ def close_order(db_path: str, n_om: int, fecha_realizacion: datetime = None) -> 
     if fecha_realizacion is None:
         fecha_realizacion = datetime.now()
     date_literal = f"#{fecha_realizacion.year}/{fecha_realizacion.month:02d}/{fecha_realizacion.day:02d}#"
+
+    def _esc(v: str) -> str:
+        return v.replace("'", "''") if v else ""
+
+    extra = ""
+    if solicita is not None:
+        extra += f", [Solicita] = '{_esc(solicita)}'"
+    if pm1 is not None:
+        extra += f", [PM1] = '{_esc(pm1)}'" if pm1 else ", [PM1] = Null"
+    if pm2 is not None:
+        extra += f", [PM2] = '{_esc(pm2)}'" if pm2 else ", [PM2] = Null"
+    if pm3 is not None:
+        extra += f", [PM3] = '{_esc(pm3)}'" if pm3 else ", [PM3] = Null"
+
     sql = (
         f"UPDATE [Base Orden Mantenimiento] "
-        f"SET [¿Finalizado?] = True, [Fecha realización] = {date_literal} "
+        f"SET [¿Finalizado?] = True, [Fecha realización] = {date_literal}{extra} "
         f"WHERE [N°OM] = {n_om}"
     )
     try:
@@ -295,6 +317,25 @@ def close_order(db_path: str, n_om: int, fecha_realizacion: datetime = None) -> 
         return False
     except Exception as e:
         logger.error("Error closing order #%d: %s", n_om, e)
+        return False
+
+
+def update_solicita(db_path: str, n_om: int, solicita: str) -> bool:
+    """Update the Solicita field for the given order."""
+    conn_str = get_connection_string(db_path)
+    try:
+        conn = pyodbc.connect(conn_str)
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE [Base Orden Mantenimiento] SET [Solicita]=? WHERE [N°OM]=?",
+            solicita or None, n_om,
+        )
+        conn.commit()
+        conn.close()
+        logger.info("Updated Solicita for OM #%d: %s", n_om, solicita)
+        return True
+    except Exception as e:
+        logger.error("Error updating Solicita for OM #%d: %s", n_om, e)
         return False
 
 
