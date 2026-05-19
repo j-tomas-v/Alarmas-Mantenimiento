@@ -401,16 +401,12 @@ class DashboardView(tk.Frame):
         def _save():
             solicita = sol_var.get().strip()
             pm1, pm2, pm3 = (v.get().strip() for v in pm_vars)
-            ok_personal = True
-            ok_solicita = True
-            if self._controller and hasattr(self._controller, "assign_personal"):
-                ok_personal = self._controller.assign_personal(new_n_om, pm1, pm2, pm3)
-            if self._controller and hasattr(self._controller, "update_solicita"):
-                ok_solicita = self._controller.update_solicita(new_n_om, solicita)
-            if ok_personal and ok_solicita:
-                popup.destroy()
-            else:
-                messagebox.showerror("Error", "No se pudo guardar en la base de datos.", parent=popup)
+            if self._controller and hasattr(self._controller, "assign_personal_and_solicita"):
+                ok = self._controller.assign_personal_and_solicita(new_n_om, pm1, pm2, pm3, solicita)
+                if ok:
+                    popup.destroy()
+                else:
+                    messagebox.showerror("Error", "No se pudo guardar en la base de datos.", parent=popup)
 
         btn_row = tk.Frame(frame)
         btn_row.pack(pady=(15, 0))

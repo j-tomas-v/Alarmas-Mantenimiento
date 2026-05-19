@@ -5,7 +5,7 @@ from tkinter import ttk, messagebox
 from datetime import datetime
 from typing import Optional
 
-from core.alerts import AlertRegistry, is_alert_in_cooldown, log_alert_sent
+from core.alerts import AlertRegistry, is_alert_in_cooldown, load_alert_log, log_alert_sent
 from core.email_service import send_alert_email
 from core.models import Alert
 from gui.styles import (
@@ -98,7 +98,7 @@ class AlertsView(tk.Frame):
     def _apply_filter(self, event=None):
         self._table.clear()
         tipo_filter = self._type_var.get()
-        for alert in self._alerts:
+        for idx, alert in enumerate(self._alerts):
             if tipo_filter != "Todos" and alert.display_name != tipo_filter:
                 continue
 
@@ -112,7 +112,7 @@ class AlertsView(tk.Frame):
                 alert.mensaje,
                 alert.timestamp.strftime("%d/%m/%Y %H:%M"),
                 personal,
-            ), tag)
+            ), tag, iid=str(idx))
 
     def _assign_personal(self):
         selection = self._table.tree.selection()
@@ -120,9 +120,7 @@ class AlertsView(tk.Frame):
             messagebox.showwarning("Sin seleccion", "Seleccione una alerta para asignar personal.")
             return
 
-        item = self._table.tree.item(selection[0])
-        msg = item["values"][1]
-        alert = next((a for a in self._alerts if a.mensaje == msg), None)
+        alert = self._alerts[int(selection[0])]
         if not alert or not alert.orden:
             messagebox.showwarning(
                 "Sin orden", "Esta alerta no tiene una orden de mantenimiento asociada.")
@@ -178,13 +176,7 @@ class AlertsView(tk.Frame):
             messagebox.showwarning("Sin seleccion", "Seleccione una alerta para enviar.")
             return
 
-        item = self._table.tree.item(selection[0])
-        # Find matching alert
-        msg = item["values"][1]
-        alert = next((a for a in self._alerts if a.mensaje == msg), None)
-        if not alert:
-            return
-
+        alert = self._alerts[int(selection[0])]
         self._send_single_alert(alert)
 
     def _send_single_alert(self, alert: Alert):
@@ -225,8 +217,9 @@ class AlertsView(tk.Frame):
         failed = 0
         cooldown = 7
 
+        alert_log = load_alert_log()  # load once, not per alert
         for alert in self._alerts:
-            if is_alert_in_cooldown(alert, cooldown):
+            if is_alert_in_cooldown(alert, cooldown, log=alert_log):
                 skipped += 1
                 continue
 

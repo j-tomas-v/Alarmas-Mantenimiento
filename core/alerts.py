@@ -211,14 +211,26 @@ def load_alert_log() -> list[dict]:
 
 
 def save_alert_log(log: list[dict]):
+    # Prune entries older than 90 days to keep the file small
+    cutoff = (datetime.now() - timedelta(days=90)).isoformat()
+    log = [e for e in log if e.get("timestamp", "") >= cutoff]
     os.makedirs(os.path.dirname(ALERT_LOG_PATH), exist_ok=True)
     with open(ALERT_LOG_PATH, "w", encoding="utf-8") as f:
         json.dump(log, f, indent=2, ensure_ascii=False, default=str)
 
 
-def is_alert_in_cooldown(alert: Alert, cooldown_days: int = 7) -> bool:
-    """Check if this alert was already sent within the cooldown period."""
-    log = load_alert_log()
+def is_alert_in_cooldown(
+    alert: Alert,
+    cooldown_days: int = 7,
+    log: Optional[list[dict]] = None,
+) -> bool:
+    """Check if this alert was already sent within the cooldown period.
+
+    Pass a pre-loaded log when checking multiple alerts in a loop to avoid
+    reading the file from disk on every call.
+    """
+    if log is None:
+        log = load_alert_log()
     cutoff = datetime.now() - timedelta(days=cooldown_days)
     n_om = alert.orden.n_om if alert.orden else 0
 

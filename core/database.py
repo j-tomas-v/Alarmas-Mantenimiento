@@ -6,7 +6,7 @@ from typing import Optional
 
 import pyodbc
 
-from core.models import OrdenMantenimiento, PampoEntry, Prioridad
+from core.models import OrdenMantenimiento, Prioridad
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,6 @@ DRIVER_NAME = "Microsoft Access Driver (*.mdb, *.accdb)"
 
 
 def _clean_date(value: Optional[datetime]) -> Optional[datetime]:
-    """Return None for placeholder dates (1999-12-30) or actual None."""
     if value is None:
         return None
     if isinstance(value, datetime) and value.year == 1999:
@@ -35,7 +34,6 @@ def _parse_priority(alta: bool, media: bool, baja: bool) -> Prioridad:
 
 
 def check_driver_installed() -> bool:
-    """Check if the Microsoft Access ODBC driver is available."""
     try:
         drivers = pyodbc.drivers()
         return DRIVER_NAME in drivers
@@ -50,88 +48,11 @@ def get_connection_string(db_path: str) -> str:
     )
 
 
-def get_all_pampo(db_path: str) -> list[PampoEntry]:
-    """Get all PAMPO entries."""
-    conn_str = get_connection_string(db_path)
-    entries = []
-    try:
-        conn = pyodbc.connect(conn_str)
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT [ID_PAMPO], [Máquina], [Actividad] FROM [PAMPO]"
-        )
-        for row in cursor.fetchall():
-            entries.append(PampoEntry(
-                id_pampo=int(row[0]),
-                maquina=row[1] or "",
-                actividad=row[2] or "",
-            ))
-        conn.close()
-    except Exception as e:
-        logger.error("Error reading PAMPO table: %s", e)
-    return entries
-
-
-def get_pending_orders(db_path: str, year_from: int = 2025) -> list[OrdenMantenimiento]:
-    """Get all non-completed orders from year_from onwards, joined with PAMPO."""
-    conn_str = get_connection_string(db_path)
-    orders = []
-    try:
-        conn = pyodbc.connect(conn_str)
-        cursor = conn.cursor()
-        # Use o.* to avoid pyodbc counting '?' inside column names like
-        # [¿Con parada de producción?] and [¿Finalizado?] as parameter markers.
-        # Use an Access date literal instead of a '?' parameter for the same reason.
-        date_literal = f"#{year_from}/01/01#"
-        query = (
-            "SELECT o.*, p.[Máquina], p.[Actividad] "
-            "FROM [Base Orden Mantenimiento] AS o "
-            "LEFT JOIN [PAMPO] AS p ON o.[ID PAMPO] = p.[ID_PAMPO] "
-            f"WHERE o.[Fecha] >= {date_literal} "
-            "ORDER BY o.[Fecha] DESC"
-        )
-        cursor.execute(query)
-        cols = {desc[0]: i for i, desc in enumerate(cursor.description)}
-
-        for row in cursor.fetchall():
-            id_pampo_val = row[cols["ID PAMPO"]]
-            personal = [p for p in [
-                row[cols.get("PM1")],
-                row[cols.get("PM2")],
-                row[cols.get("PM3")],
-            ] if p]
-            orden = OrdenMantenimiento(
-                n_om=row[cols["N°OM"]],
-                fecha=_clean_date(row[cols["Fecha"]]),
-                preventivo=bool(row[cols["Preventivo"]]),
-                correctivo=bool(row[cols["Correctivo"]]),
-                prioridad=_parse_priority(
-                    bool(row[cols["Alta"]]),
-                    bool(row[cols["Media"]]),
-                    bool(row[cols["Baja"]]),
-                ),
-                solicita=row[cols["Solicita"]] or "",
-                realizar_el_dia=_clean_date(row[cols["Realizar el día"]]),
-                con_parada=bool(row[cols["¿Con parada de producción?"]]),
-                id_pampo=int(id_pampo_val) if id_pampo_val else 0,
-                finalizado=bool(row[cols["¿Finalizado?"]]),
-                fecha_realizacion=_clean_date(row[cols["Fecha realización"]]),
-                personal=personal,
-                observaciones=row[cols["Cusa falla/Observaciones"]] or "",
-                maquina=row[cols["Máquina"]] or f"PAMPO #{id_pampo_val}",
-                actividad=row[cols["Actividad"]] or "",
-            )
-            orders.append(orden)
-        conn.close()
-    except Exception as e:
-        logger.error("Error reading orders: %s", e)
-    return orders
-
-
 def get_all_orders(db_path: str, year_from: int = 2025) -> list[OrdenMantenimiento]:
     """Get ALL orders (completed and pending) from year_from onwards."""
     conn_str = get_connection_string(db_path)
     orders = []
+    conn = None
     try:
         conn = pyodbc.connect(conn_str)
         cursor = conn.cursor()
@@ -178,9 +99,11 @@ def get_all_orders(db_path: str, year_from: int = 2025) -> list[OrdenMantenimien
                 actividad=row[cols["Actividad"]] or "",
             )
             orders.append(orden)
-        conn.close()
     except Exception as e:
         logger.error("Error reading orders: %s", e)
+    finally:
+        if conn:
+            conn.close()
     return orders
 
 
@@ -188,6 +111,7 @@ def get_unique_personnel(db_path: str) -> list[str]:
     """Return a sorted list of unique personnel names from PM1, PM2, PM3 columns."""
     conn_str = get_connection_string(db_path)
     names: set[str] = set()
+    conn = None
     try:
         conn = pyodbc.connect(conn_str)
         cursor = conn.cursor()
@@ -196,15 +120,18 @@ def get_unique_personnel(db_path: str) -> list[str]:
             for val in row:
                 if val and str(val).strip():
                     names.add(str(val).strip())
-        conn.close()
     except Exception as e:
         logger.error("Error reading personnel list: %s", e)
+    finally:
+        if conn:
+            conn.close()
     return sorted(names)
 
 
 def update_personal(db_path: str, n_om: int, pm1: str, pm2: str, pm3: str) -> bool:
     """Update PM1, PM2, PM3 for the given order. Empty string clears the field."""
     conn_str = get_connection_string(db_path)
+    conn = None
     try:
         conn = pyodbc.connect(conn_str)
         cursor = conn.cursor()
@@ -213,12 +140,14 @@ def update_personal(db_path: str, n_om: int, pm1: str, pm2: str, pm3: str) -> bo
             pm1 or None, pm2 or None, pm3 or None, n_om,
         )
         conn.commit()
-        conn.close()
         logger.info("Updated personal for OM #%d: PM1=%s PM2=%s PM3=%s", n_om, pm1, pm2, pm3)
         return True
     except Exception as e:
         logger.error("Error updating personal for OM #%d: %s", n_om, e)
         return False
+    finally:
+        if conn:
+            conn.close()
 
 
 def create_order(
@@ -244,16 +173,15 @@ def create_order(
         f"{'True' if preventivo else 'False'}, {'True' if correctivo else 'False'}, "
         f"{realizar_lit})"
     )
+    conn_ado = None
     try:
         import win32com.client
         conn_ado = win32com.client.Dispatch("ADODB.Connection")
         conn_ado.Open(f"Provider=Microsoft.ACE.OLEDB.12.0;Data Source={db_path};")
         conn_ado.Execute(sql_insert)
-        # Retrieve the auto-generated N°OM
         rs, _ = conn_ado.Execute("SELECT @@IDENTITY")
         new_n_om = int(rs.Fields(0).Value) if not rs.EOF else None
         rs.Close()
-        conn_ado.Close()
         logger.info("Created new order #%s for PAMPO %d (realizar el dia %s)",
                     new_n_om, id_pampo, realizar_el_dia.strftime("%d/%m/%Y"))
         return new_n_om
@@ -263,6 +191,12 @@ def create_order(
     except Exception as e:
         logger.error("Error creating new order for PAMPO %d: %s", id_pampo, e)
         return None
+    finally:
+        if conn_ado:
+            try:
+                conn_ado.Close()
+            except Exception:
+                pass
 
 
 def close_order(
@@ -304,12 +238,12 @@ def close_order(
         f"SET [¿Finalizado?] = True, [Fecha realización] = {date_literal}{extra} "
         f"WHERE [N°OM] = {n_om}"
     )
+    conn_ado = None
     try:
         import win32com.client
         conn_ado = win32com.client.Dispatch("ADODB.Connection")
         conn_ado.Open(f"Provider=Microsoft.ACE.OLEDB.12.0;Data Source={db_path};")
         conn_ado.Execute(sql)
-        conn_ado.Close()
         logger.info("Order #%d marked as completed on %s", n_om, fecha_realizacion.strftime("%d/%m/%Y"))
         return True
     except ImportError:
@@ -318,11 +252,18 @@ def close_order(
     except Exception as e:
         logger.error("Error closing order #%d: %s", n_om, e)
         return False
+    finally:
+        if conn_ado:
+            try:
+                conn_ado.Close()
+            except Exception:
+                pass
 
 
 def update_solicita(db_path: str, n_om: int, solicita: str) -> bool:
     """Update the Solicita field for the given order."""
     conn_str = get_connection_string(db_path)
+    conn = None
     try:
         conn = pyodbc.connect(conn_str)
         cursor = conn.cursor()
@@ -331,16 +272,17 @@ def update_solicita(db_path: str, n_om: int, solicita: str) -> bool:
             solicita or None, n_om,
         )
         conn.commit()
-        conn.close()
         logger.info("Updated Solicita for OM #%d: %s", n_om, solicita)
         return True
     except Exception as e:
         logger.error("Error updating Solicita for OM #%d: %s", n_om, e)
         return False
+    finally:
+        if conn:
+            conn.close()
 
 
 def load_config(config_path: str = "config.ini") -> configparser.ConfigParser:
-    """Load application configuration."""
     config = configparser.ConfigParser()
     if os.path.exists(config_path):
         config.read(config_path, encoding="utf-8")

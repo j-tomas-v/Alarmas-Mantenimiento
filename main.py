@@ -12,8 +12,9 @@ from datetime import datetime, timedelta
 
 import schedule
 
-from core.alerts import create_default_registry, is_alert_in_cooldown, log_alert_sent
-from core.database import check_driver_installed, close_order as db_close_order, create_order as db_create_order, get_all_orders, get_all_pampo, get_unique_personnel, load_config, update_personal, update_solicita as db_update_solicita
+from core.alerts import create_default_registry, is_alert_in_cooldown, load_alert_log, log_alert_sent
+from core.keyring_store import get_smtp_password
+from core.database import check_driver_installed, close_order as db_close_order, create_order as db_create_order, get_all_orders, get_unique_personnel, load_config, update_personal, update_solicita as db_update_solicita
 from core.email_service import send_alert_email
 from core.models import Alert
 from core.urgency import get_upcoming_threshold, load_pampo_frequencies, process_orders
@@ -125,7 +126,7 @@ class AppController:
 
         # Update alerts view
         alerts_view: AlertsView = self.app.get_view("alertas")
-        smtp_config = dict(self.config.items("smtp")) if self.config.has_section("smtp") else {}
+        smtp_config = self._get_smtp_config()
         smtp_config.update(config_dict.get("recipients", {}))
         alerts_view.set_smtp_config(smtp_config)
         alerts_view.set_alerts(self.alerts)
@@ -232,10 +233,31 @@ class AppController:
             self.evaluate_alerts()
         return success
 
+    def assign_personal_and_solicita(
+        self, n_om: int, pm1: str, pm2: str, pm3: str, solicita: str
+    ) -> bool:
+        """Write personal and solicita in one batch, then refresh once."""
+        db_path = self.config.get("database", "path", fallback="")
+        ok1 = update_personal(db_path, n_om, pm1, pm2, pm3)
+        ok2 = db_update_solicita(db_path, n_om, solicita)
+        if ok1 and ok2:
+            self.refresh_data()
+            self.evaluate_alerts()
+        return ok1 and ok2
+
+    def _get_smtp_config(self) -> dict:
+        """Build the smtp config dict, injecting the keyring password if needed."""
+        if not self.config.has_section("smtp"):
+            return {}
+        cfg = dict(self.config.items("smtp"))
+        if cfg.get("password") == "<keyring>":
+            cfg["password"] = get_smtp_password(cfg.get("username", ""))
+        return cfg
+
     def _update_smtp_config(self):
         alerts_view: AlertsView = self.app.get_view("alertas")
-        if self.config.has_section("smtp"):
-            smtp_config = dict(self.config.items("smtp"))
+        smtp_config = self._get_smtp_config()
+        if smtp_config:
             if self.config.has_section("recipients"):
                 smtp_config.update(dict(self.config.items("recipients")))
             alerts_view.set_smtp_config(smtp_config)
@@ -282,15 +304,16 @@ class AppController:
         if not self.config.has_section("smtp") or not self.config.get("smtp", "server", fallback=""):
             return
 
-        smtp_config = dict(self.config.items("smtp"))
+        smtp_config = self._get_smtp_config()
         cooldown = self.config.getint("alertas", "cooldown_dias", fallback=7)
         config_dict = {
             "recipients": dict(self.config.items("recipients")) if self.config.has_section("recipients") else {},
         }
 
         sent = 0
+        alert_log = load_alert_log()  # load once, not per alert
         for alert in self.alerts:
-            if is_alert_in_cooldown(alert, cooldown):
+            if is_alert_in_cooldown(alert, cooldown, log=alert_log):
                 continue
             evaluator = self.registry.get_evaluator(alert.tipo)
             if not evaluator:

@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 from core.email_service import test_smtp_connection
+from core.keyring_store import get_smtp_password, keyring_available, set_smtp_password
 from core.personal_directory import load_directory, save_directory
 from gui.styles import COLOR_BG, COLOR_CARD_BG, COLOR_TEXT, FONT_BODY, FONT_SUBTITLE, FONT_TITLE, PADDING
 
@@ -344,12 +345,23 @@ class SettingsView(tk.Frame):
             "year_from": self._year_var.get(),
         }
 
+        raw_password = self._smtp_vars["password"].get()
+        username = self._smtp_vars["username"].get()
+        if raw_password and raw_password != "<keyring>":
+            if keyring_available():
+                set_smtp_password(username, raw_password)
+                stored_password = "<keyring>"
+            else:
+                stored_password = raw_password
+        else:
+            stored_password = raw_password
+
         config["smtp"] = {
             "server": self._smtp_vars["server"].get(),
             "port": self._smtp_vars["port"].get(),
             "use_tls": "true" if self._tls_var.get() else "false",
-            "username": self._smtp_vars["username"].get(),
-            "password": self._smtp_vars["password"].get(),
+            "username": username,
+            "password": stored_password,
             "from_name": self._smtp_vars["from_name"].get(),
         }
 
@@ -374,6 +386,11 @@ class SettingsView(tk.Frame):
             for key, var in self._smtp_vars.items():
                 var.set(config.get("smtp", key, fallback=""))
             self._tls_var.set(config.get("smtp", "use_tls", fallback="true").lower() == "true")
+            # Load password from keyring if it was stored there
+            stored_pw = config.get("smtp", "password", fallback="")
+            if stored_pw == "<keyring>":
+                username = config.get("smtp", "username", fallback="")
+                self._smtp_vars["password"].set(get_smtp_password(username))
 
         if config.has_section("recipients"):
             for key, var in self._recip_vars.items():

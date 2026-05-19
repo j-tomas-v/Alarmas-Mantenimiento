@@ -3,6 +3,8 @@
 import logging
 import os
 import sys
+import time
+from datetime import datetime
 
 from flask import Flask, jsonify, render_template, request
 
@@ -18,6 +20,9 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__, template_folder="templates")
 
+_order_cache: dict = {"orders": None, "summary": None, "ts": 0.0}
+_CACHE_TTL = 60  # seconds — Access DB is read at most once per minute
+
 
 def _load_orders(config):
     """Load and process orders from the Access database."""
@@ -32,6 +37,15 @@ def _load_orders(config):
     default_freq = config.getint("alertas", "frecuencia_default_dias", fallback=30)
     orders = process_orders(orders, frequencies, default_freq)
     summary = get_summary(orders)
+    return orders, summary
+
+
+def _load_orders_cached(config):
+    now = time.time()
+    if _order_cache["orders"] is not None and now - _order_cache["ts"] < _CACHE_TTL:
+        return _order_cache["orders"], _order_cache["summary"]
+    orders, summary = _load_orders_cached(config)
+    _order_cache.update({"orders": orders, "summary": summary, "ts": now})
     return orders, summary
 
 
@@ -54,7 +68,7 @@ def _serialize_order(o):
 @app.route("/")
 def dashboard():
     config = load_config()
-    orders, summary = _load_orders(config)
+    orders, summary = _load_orders_cached(config)
     refresh_seconds = config.getint("web", "refresh_seconds", fallback=60)
 
     show_all = request.args.get("all", "0") == "1"
@@ -64,7 +78,6 @@ def dashboard():
     else:
         display_orders = orders
 
-    from datetime import datetime
     timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
     return render_template(
@@ -80,7 +93,7 @@ def dashboard():
 @app.route("/api/orders")
 def api_orders():
     config = load_config()
-    orders, summary = _load_orders(config)
+    orders, summary = _load_orders_cached(config)
 
     show_all = request.args.get("all", "0") == "1"
     if not show_all:

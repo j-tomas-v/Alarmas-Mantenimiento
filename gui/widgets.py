@@ -83,5 +83,8 @@ class ScrollableTreeview(tk.Frame):
         for item in self.tree.get_children():
             self.tree.delete(item)
 
-    def insert_row(self, values: tuple, tag: str = ""):
-        self.tree.insert("", "end", values=values, tags=(tag,))
+    def insert_row(self, values: tuple, tag: str = "", iid: Optional[str] = None):
+        kwargs: dict = {"values": values, "tags": (tag,)}
+        if iid is not None:
+            kwargs["iid"] = iid
+        self.tree.insert("", "end", **kwargs)
